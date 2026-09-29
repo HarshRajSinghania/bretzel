@@ -2,9 +2,10 @@
 
 Slot inventory :
 
-- ``wrapper``    : outer ``<div>``. ``relative`` + ``w-fit`` so the
-  box tracks the SVG's rendered width (see the slot's own note).
-- ``svg``        : the chart SVG.
+- ``wrapper``    : outer ``<div>``, the width of the chart (the
+  container's, or ``width=``'s).
+- ``svg``        : the chart SVG — the plot rectangle, its margins are
+  CSS (cf. ``_layers.plot_svg``).
 - ``line``       : the polyline stroke per series.
 - ``area``       : optional area fill under the line.
 - ``dot``        : optional per-point marker (when ``show_dots=True``).
@@ -39,31 +40,27 @@ from typing import Any
 
 LINE_CHART_THEME: dict[str, Any] = {
     "slots": {
-        # ``w-fit max-w-full`` sizes the wrapper to the SVG's actual
-        # rendered width (with a max of the container) instead of
-        # stretching to the parent's cross-axis. Without this, the
-        # legend row and anything else measured off the wrapper stretch
-        # to the parent container's right edge — far from the chart
-        # whenever a vstack/flex-col ancestor applies
-        # ``align-items: stretch`` (default, and the original reason
-        # this was set). The chart visual itself is unchanged (viewBox
-        # ``preserveAspectRatio=meet`` already kept it at its intrinsic
-        # size, just centred inside the over-sized SVG element).
-        "wrapper":      "relative flex flex-col gap-3 w-fit max-w-full",
-        "svg":          "block max-w-full overflow-visible",
+        # ``w-full``: the chart takes its container's width — the plot
+        # is drawn in percentages of it (``_svg.PLOT_SPAN``), so the
+        # legend, centred on the wrapper, is centred on the chart.
+        # ``min-w-0`` lets two charts share a row. It was
+        # ``w-fit max-w-full`` while the SVG had a fixed intrinsic width
+        # (600): a wide card kept the chart at 600 px on its left.
+        "wrapper":      "relative flex flex-col gap-3 w-full min-w-0",
+        "svg":          "block overflow-visible",
         # ``transition-[d]`` morphs the path when @refreshable
-        # swaps new data. ``bz-line-entry`` reveals the stroke on
-        # first paint via ``stroke-dashoffset 1 → 0`` — paired with
-        # the path's ``pathLength="1"`` SVG attr so the dash is
-        # normalised to the path's actual length (short polylines
-        # animate over the full duration, no race-to-the-end).
+        # swaps new data. ``bz-area-entry`` reveals the line left to
+        # right on first paint, by clipping — the same keyframe as the
+        # area, so the two finish together. It was a dash reveal
+        # (``bz-line-entry``, ``pathLength="1"``), which the stretched
+        # frame breaks: cf. ``line_chart._stretched_frame``.
         # ``drop-shadow-sm`` lifts the line off the gridlines —
         # calibrated to disappear under dark themes.
         "line": (
             "stroke-(--bz-solid) fill-none "
             "transition-[d] duration-500 ease-out "
             "drop-shadow-sm "
-            "bz-line-entry"
+            "bz-area-entry"
         ),
         # ``transition-[d]`` morphs the silhouette on data refresh.
         # ``bz-area-entry`` (CSS keyframe in ``render/shell.py``)
@@ -103,7 +100,13 @@ LINE_CHART_THEME: dict[str, Any] = {
         # ``fill-`` substitute with the ref's colour so a goal can pop
         # in ``success`` green while a baseline sits in muted grey.
         "reference_line":  "stroke-(--bz-solid)/60",
-        "reference_label": "fill-(--bz-solid)/80 font-medium",
+        # Painted OVER the data: a halo in the page colour keeps it
+        # readable on a curve or an area, and it gives the hover back to
+        # what lies beneath.
+        "reference_label": (
+            "fill-(--bz-solid)/80 font-medium pointer-events-none "
+            "stroke-background stroke-3 [paint-order:stroke]"
+        ),
         "legend":       "flex flex-wrap items-center justify-center gap-x-4 gap-y-1",
         # Each legend entry is a ``<button>`` (click to toggle the
         # series). ``cursor-pointer`` + the focus ring let the keyboard
@@ -137,5 +140,18 @@ LINE_CHART_THEME: dict[str, Any] = {
     # fading to the page background (which reads as "dark" on a dark
     # theme). Tweak here to change the fade depth.
     "area_gradient": {"top": 0.45, "bottom": 0.10},
-    "palette": ("primary", "success", "warning", "info", "error", "muted"),
+    # The auto-cycle when a series carries no ``color=``. BRAND colours
+    # first, then status colours, ``error`` last. The identity's author
+    # chose ``primary`` and ``secondary`` as a pair, so they are the two
+    # the framework can trust to differ; a status colour is only
+    # guaranteed to differ from the OTHER status colours
+    # (``test_palette_distinctness``), not from an arbitrary primary. The
+    # old cycle went primary → success, so under a green identity the
+    # first two series came out the same green. ``info`` next, the only
+    # status colour that says nothing; ``error`` last, since a series in
+    # red reads as an alarm.
+    "palette": (
+        "primary", "secondary", "info", "success", "warning", "error",
+        "muted",
+    ),
 }

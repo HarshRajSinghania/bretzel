@@ -118,8 +118,18 @@ class TestDismissible:
         # The × button is the only ``close`` dispatcher.
         button_block = out[out.index("<button"):out.index("</button>")]
         assert "$dispatch('close')" in button_block
-        # Local close machinery still wired (same as dismissible=True).
-        assert 'bz-data="{open: true}"' in out
+        # Local close machinery still wired — and re-seeded by the render
+        # the server handler triggers: the server decides whether the
+        # badge still exists.
+        assert "bz-data=\"{open: true, _serverSync: ['open']}\"" in out
+        assert 'bz-show="open"' in out
+
+    def test_a_local_dismiss_is_not_re_seeded(self) -> None:
+        """Without a server handler, only the browser knows the badge is
+        closed: a neighbouring refresh must not reopen it."""
+        with render_isolated():
+            out = serialize(Badge("X", dismissible=True).render())
+        assert "_serverSync" not in out
 
     def test_dismissible_suppresses_icon_right(self) -> None:
         """When the × is showing, ``icon_right`` is dropped — the
@@ -193,9 +203,9 @@ class TestIconScalesWithSize:
         """A pre-built Icon instance passed by the caller is an
         explicit choice — Badge must NOT override its size to match
         the badge's palette."""
-        from bretzel.components.primitives.icon import Icon
-
         import re
+
+        from bretzel.components.primitives.icon import Icon
         with render_isolated():
             # Explicitly size the icon as ``xl`` and put it in a
             # ``sm`` badge — the icon stays ``xl`` (text-lg / text-xl

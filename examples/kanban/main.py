@@ -60,8 +60,9 @@ This app does not use the ``Feature`` contracts: app structure is what
 ``examples/mad`` stages.
 """
 
+import os
+
 from bretzel import Bretzel
-from examples.kanban.core.theme import THEME
 from examples.kanban.features import (
     donnees,
     fiche,
@@ -71,11 +72,16 @@ from examples.kanban.features import (
     tableau,
 )
 
+#: A local run stays in dev with a throwaway key. The public demo sets
+#: ``BRETZEL_MODE=prod`` in its compose file: the key then comes from
+#: ``$BRETZEL_SECRET_KEY`` (``secret_key=None`` falls through to it), and
+#: the framework refuses to start without one.
+MODE = os.environ.get("BRETZEL_MODE", "dev")
+
 app = Bretzel(
     title="Bretzel · Kanban",
-    secret_key="dev-kanban-secret-change-me",
-    theme=THEME,
-    mode="dev",
+    secret_key="dev-kanban-secret-change-me" if MODE == "dev" else None,
+    mode=MODE,
     # English is the source language and the default; French is one
     # click away, in the banner. The app's own sentences go through
     # ``core/i18n.tr``; the framework's own go through ``lang``.

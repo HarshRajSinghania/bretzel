@@ -43,10 +43,10 @@ from typing import Any, ClassVar
 
 from bretzel.components.base import Component, reactive_prop, reject_component
 from bretzel.components.base._wiring import (
-    SERVERSYNC_KEY,
     activate_keydown,
     bool_attr,
     hidden_carrier_attrs,
+    scope_literal,
     theme_context,
     unwrap_transparent,
 )
@@ -114,51 +114,35 @@ class Tree(Component):
         def _resolve(template: str) -> str:
             return template
 
-        # ── bz-data — the single shared disclosure (+ selection) scope ─
-        # Disclosure methods are always present ; selection methods +
-        # the local ``value`` field only when ``selectable`` (no dead code
-        # in the scope otherwise). Binding mode reads / writes the state
-        # path directly ; local mode keeps a ``value`` field. ``sel_expr``
-        # is that read/write target — the two never diverge, so one name.
-        value_binding = self._binding_metadata.get("value")
-        raw_sel = self._reactive_values.get("value")
-        initial_sel = str(raw_sel or "")
-        # Server-backed selection RE-ADOPTS from the server on a
-        # @refreshable morph via ``_serverSync`` (else absorb keeps the
-        # stale ``value`` signal) ; a literal stays client-owned. ``open``
-        # (disclosure) is pure client UI, never synced. Same gate as Tabs.
-        sel_server_backed = self._value_server_backed("value")
-        # The scope key comes from ``reactive_prop(scope_keys=)`` — it
-        # was copied as a literal in three places (the seed, the expr,
-        # the marker) and a rename had to touch all three (audit F47).
-        (sel_key,) = self._scope_keys("value")
-        sel_expr = f"this.{sel_key}"
         # ── bz-data: DATA, the methods live in the runtime ────────────
         # ``isOpen`` / ``toggle`` / ``isSel`` / ``select`` come out once
-        # from ``$bz.tree.scope``
-        # (``bretzel/runtime/_src/16_accordion.js``). This builder
-        # serialised them into EVERY instance — 293 bytes — although they
-        # are rigorously identical from one tree to the next.
+        # from ``$bz.tree.scope`` (``16_accordion.js``). Two cells:
         #
-        # ``_read``/``_write`` (expanded nodes) and
-        # ``_readSel``/``_writeSel`` (selection) carry the indirection:
-        # the same methods serve the local field and the store cell. No
-        # getter — ``absorb`` invokes each key once and would freeze it.
-        parts: list[str] = [
-            f"open: {json.dumps(self._expanded)}",
-            "_read() { return this.open; }",
-            "_write(v) { this.open = v; }",
-        ]
-        if selectable:
-            if value_binding is not None:
-                sel_expr = self.path_of(value_binding)
-            else:
-                parts.append(f"{sel_key}: {json.dumps(initial_sel)}")
-                if sel_server_backed:
-                    parts.append(f"{SERVERSYNC_KEY}: ['{sel_key}']")
-            parts.append(f"_readSel() {{ return {sel_expr}; }}")
-            parts.append(f"_writeSel(v) {{ {sel_expr} = v; }}")
-        bz_data = "{...$bz.tree.scope," + ",".join(parts) + "}"
+        # - the disclosure (``open``, the expanded branch ids) is pure
+        #   client UI, never re-seeded, read through ``_read``/``_write``;
+        # - the selection, only when ``selectable``, is the value cell —
+        #   hence its accessors renamed ``_readSel``/``_writeSel``. A
+        #   server-backed selection is re-adopted on a @refreshable morph;
+        #   a literal stays client-owned (same gate as Tabs).
+        (sel_key,) = self._scope_keys("value")
+        value_binding = self._binding_metadata.get("value")
+        initial_sel = str(self._reactive_values.get("value") or "")
+        bound_path = (
+            self.path_of(value_binding) if value_binding is not None else None
+        )
+        bz_data = scope_literal(
+            "$bz.tree.scope",
+            cell=sel_key if selectable else None,
+            initial=json.dumps(initial_sel),
+            binding_path=bound_path if selectable else None,
+            server_synced=self._value_server_backed("value"),
+            accessors=("_readSel", "_writeSel"),
+            fields={"open": json.dumps(self._expanded)},
+            methods=(
+                "_read() { return this.open; }",
+                "_write(v) { this.open = v; }",
+            ),
+        )
 
         # ── Precompute the resolved slot classes + the constant spacer ─
         # The chevron is per-node (its ``bz-show`` keys on THIS node's
@@ -218,7 +202,7 @@ class Tree(Component):
 
         hidden_node: Element | None = None
         if selectable and (name or relocated_change):
-            value_directive = sel_expr if value_binding is not None else sel_key
+            value_directive = bound_path or sel_key
             hidden_attrs: dict[str, Any] = {
                 **hidden_carrier_attrs(value_directive, initial=initial_sel),
             }

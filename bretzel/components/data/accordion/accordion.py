@@ -60,7 +60,7 @@ from bretzel.components.base import Component, reactive_prop
 from bretzel.components.base._wiring import (
     bool_attr,
     hidden_carrier_attrs,
-    server_sync_marker,
+    scope_literal,
     theme_context,
     unwrap_transparent,
 )
@@ -71,104 +71,6 @@ from bretzel.components.data.accordion.theme import ACCORDION_THEME
 from bretzel.components.primitives.icon import Icon
 from bretzel.core.tree import Element, Node
 from bretzel.core.tree import TextNode as TextNode
-
-# ───────────────────────────────────────────────────────────────────────────
-# bz-data builder — two modes (local field vs binding-getter)
-# ───────────────────────────────────────────────────────────────────────────
-
-
-def _build_bz_data(
-    *,
-    scope_key: str,
-    multiple: bool,
-    collapsible: bool,
-    has_local_value: bool,
-    initial_value: Any,
-    binding_path: str | None,
-    all_ids: list[str],
-    server_synced: bool,
-) -> str:
-    """The instance's ``bz-data``: **data, not code**.
-
-    The methods (``isOpen`` / ``toggle`` / ``expand`` / ``collapse`` /
-    ``expandAll`` / ``collapseAll``) live once in
-    ``$bz.accordion.single`` or ``$bz.accordion.multi``
-    (``bretzel/runtime/_src/16_accordion.js``).
-
-    Before that switch, this builder serialised the six bodies into
-    EVERY instance — 622 bytes — and baked the configuration into them:
-    ``if (true)`` for ``collapsible``, the list of ids hard-coded in
-    ``expandAll``. Two accordions with different configurations
-    therefore produced two different CODES, not two states.
-
-    Two scope variants rather than one parameterised: single carries a
-    STRING, multi an ARRAY — merging them would force every method to
-    re-test the type at runtime. Same reason as ``$bz.select.single`` /
-    ``$bz.select.multi``.
-
-    ``_read`` / ``_write`` cover both value modes (the local ``value``
-    field or the store cell) with the same methods. No ``get
-    expanded()``: ``scope.absorb`` invokes each key at registration and
-    would freeze the getter (cf. traps.md).
-    """
-    # JS serialisation of the state and the config — unchanged, only
-    # their DESTINATION changes: they leave as data instead of being
-    # baked into method bodies.
-    initial_js = (
-        json.dumps(
-            list(initial_value)
-            if isinstance(initial_value, (list, tuple, set))
-            else []
-        )
-        if multiple
-        else json.dumps(str(initial_value or ""))
-    )
-    all_ids_js = json.dumps(all_ids)
-    collapsible_js = "true" if collapsible else "false"
-    is_multiple = multiple
-
-    # ``_allIds`` / ``_collapsible`` are CONFIG: the list of panels and
-    # the mode come from the server, the client never writes them →
-    # re-seeded unconditionally. ``absorb`` never rewrites an existing
-    # signal, so without that an accordion that gains or loses a panel
-    # kept its old list of ids (``expand_all`` forgot one). Same root as
-    # Pagination's ``_total``.
-    config_sync = ["_allIds"] if is_multiple else ["_allIds", "_collapsible"]
-
-    if has_local_value:
-        # The VALUE stays gated: with no server ownership, a
-        # neighbouring @refreshable's morph would erase the client's
-        # expand/collapse.
-        keys = [scope_key, *config_sync] if server_synced else config_sync
-        sync = server_sync_marker(*keys, enabled=True)
-        state = f"{scope_key}: {initial_js},{sync} "
-        read_write = (
-            f"_read() {{ return this.{scope_key}; }},"
-            f"_write(v) {{ this.{scope_key} = v; }},"
-        )
-    else:
-        assert binding_path is not None
-        state = f"{server_sync_marker(*config_sync, enabled=True).lstrip()} "
-        read_write = (
-            f"_read() {{ return {binding_path}; }},"
-            f"_write(v) {{ {binding_path} = v; }},"
-        )
-
-    variant = "multi" if is_multiple else "single"
-    config = f"_allIds: {all_ids_js},"
-    if not is_multiple:
-        # ``collapsible`` only concerns single mode: in multi, every
-        # panel always closes.
-        config += f"_collapsible: {collapsible_js},"
-
-    return (
-        "{...$bz.accordion." + variant + ","
-        + state
-        + read_write
-        + config.rstrip(",")
-        + "}"
-    )
-
 
 # The change dispatcher (``change_emit_effect``) runs as a ``bz-effect``
 # on the hidden input : it bootstraps quietly (no phantom change on the
@@ -338,15 +240,26 @@ class Accordion(Component):
             for item, _ in item_children
         ]
 
-        bz_data = _build_bz_data(
-            scope_key=scope_key,
-            multiple=is_multiple,
-            collapsible=collapsible,
-            has_local_value=value_binding is None,
-            initial_value=initial_value,
+        # The methods live once in ``$bz.accordion.single`` / ``.multi``
+        # (``16_accordion.js``). Two slabs rather than one parameterised:
+        # single carries a STRING, multi an ARRAY — merging them would
+        # make every method re-test the type (same reason as Select).
+        #
+        # ``_allIds`` / ``_collapsible`` are server config: an accordion
+        # that gains a panel must not keep its old list of ids
+        # (``expand_all`` would forget one).
+        config = {"_allIds": json.dumps(all_ids)}
+        if not is_multiple:
+            # ``collapsible`` only concerns single mode: in multi, every
+            # panel always closes.
+            config["_collapsible"] = "true" if collapsible else "false"
+        bz_data = scope_literal(
+            "$bz.accordion.multi" if is_multiple else "$bz.accordion.single",
+            cell=scope_key,
+            initial=json.dumps(initial_value),
             binding_path=binding_path,
-            all_ids=all_ids,
             server_synced=value_server_backed,
+            config=config,
         )
 
         # ── Build item nodes ─────────────────────────────────────────

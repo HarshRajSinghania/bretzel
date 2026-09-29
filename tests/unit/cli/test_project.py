@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import importlib
+import re
+import shlex
 import sys
 from pathlib import Path
 
 import pytest
 
 from bretzel.cli.commands.project import create_project, run_project
-from bretzel.cli.main import main
+from bretzel.cli.main import build_parser, main
 
 
 def test_new_creates_an_importable_application(tmp_path: Path, monkeypatch) -> None:
@@ -65,6 +67,30 @@ def test_dev_uses_the_framework_watcher(tmp_path: Path, monkeypatch) -> None:
     assert measured["target"] == "app.main:app"
     assert measured["port"] == 8123
     assert measured["watch_dirs"] == [destination.resolve()]
+
+
+def test_every_command_of_the_ai_guide_runs_on_the_new_project(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """Le guide que ``bretzel new`` écrit pour l'IA ne cite que des
+    commandes qui marchent, sur le projet qu'il accompagne : un guide qui
+    ment coûte plus cher qu'aucun guide. ``probe`` demande un navigateur :
+    il est seulement analysé."""
+    destination = tmp_path / "guided"
+    create_project(destination, display_name="Guided")
+    guide = (destination / "AGENTS.md").read_text(encoding="utf-8")
+    assert (destination / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.md\n"
+
+    commands = [shlex.split(c)[1:] for c in re.findall(r"`(bretzel [^`]+)`", guide)]
+    assert len(commands) >= 4, f"le guide ne cite plus ses commandes : {commands}"
+    monkeypatch.chdir(destination)
+    monkeypatch.syspath_prepend(str(destination))
+    monkeypatch.setenv("BRETZEL_MODE", "dev")
+    for argv in commands:
+        if argv[0] == "probe":
+            build_parser().parse_args(argv)  # SystemExit si la commande est fausse
+            continue
+        assert main(argv) == 0, (argv, capsys.readouterr())
 
 
 @pytest.fixture(autouse=True)

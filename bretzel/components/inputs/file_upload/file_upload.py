@@ -34,6 +34,16 @@ input so parent ``<form>`` submits exactly what's displayed, image
 preview thumbnails via ``URL.createObjectURL``, and the optional
 async upload mode (XHR per file with progress events).
 
+``paste=True`` — a Ctrl+V anywhere in the enclosing ``<form>`` (the
+field the question is written in, typically) joins the files the
+clipboard carries, as a pick would: a screenshot, or files copied from
+the file manager. A paste that carries TEXT is left to the field, even
+with a picture beside it — Excel cells and Word paragraphs both come
+with a rendering of themselves. A pasted screenshot, which the browser
+always names ``image.png``, is renamed ``pasted-<date>-<hour>.png``.
+With no form around, the component itself listens. One ``paste=True``
+picker per form: two would both take the files.
+
 Two upload modes :
 
 - **Form mode** (default) — files just accumulate in the hidden
@@ -229,6 +239,7 @@ class FileUpload(Component):
         size: str | None = None,
         upload_url: str | None = None,
         show_previews: bool = True,
+        paste: bool = False,
         name: str | None = None,
         on_change: Callable[..., Any] | str | None = None,
         on_upload_start: Callable[..., Any] | str | None = None,
@@ -285,6 +296,7 @@ class FileUpload(Component):
         self._max_files = max_files
         self._upload_url = upload_url
         self._show_previews = show_previews
+        self._paste = paste
 
         # ``accept=`` accepts either a comma string ("image/*,.pdf")
         # OR a list (["image/*", ".pdf"]) — normalise to the comma form
@@ -357,7 +369,11 @@ class FileUpload(Component):
 
         # ── Root attrs ─────────────────────────────────────────────
         root_attrs = self.emit_attrs()
-        root_attrs["class"] = s("root")
+        # ``variant`` is not a reactive prop here, so ``compose_class``
+        # cannot append its row: it is read by hand, like the sizes.
+        root_attrs["class"] = " ".join(filter(None, [
+            s("root"), theme.get("variants", {}).get(self._variant, ""),
+        ]))
         # ``el: $el`` captures the root in the scope (methods have no
         # $root) — the slab's ``querySelector`` + every ``dispatch()``
         # ride off it. Spliced after the leading brace because ``$el`` is
@@ -366,6 +382,10 @@ class FileUpload(Component):
         # never ``"{}"``.
         scope_arg = "{el: $el, " + json.dumps(opts)[1:]
         root_attrs["bz-data"] = f"$bz.fileUpload.makeScope({scope_arg})"
+        if self._paste:
+            # On the ROOT, which carries the scope: the dropzone's wrapper
+            # has its own ``bz-init``, the button shape has none.
+            root_attrs["bz-init"] = "watchPaste()"
 
         # ── Event relocation / normalisation ───────────────────────
         # The slab dispatches kebab-case events on the root and they

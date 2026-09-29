@@ -294,6 +294,50 @@ def test_the_preview_follows_the_pointer_and_is_anonymous(page) -> None:
     assert not after, "the preview outlived the drop"
 
 
+def test_terminal_archive_does_not_insert_an_invisible_card(page) -> None:
+    """The archive label must not shift when a card hovers its clipped box."""
+    page.evaluate("""() => {
+        const archive = document.createElement('div');
+        archive.id = 'archive';
+        archive.setAttribute('data-bz-dropzone', 'archive');
+        archive.setAttribute('data-bz-accepts', 'task');
+        archive.setAttribute('data-bz-terminal', 'true');
+        archive.setAttribute('data-bz-locked', 'true');
+        archive.style.cssText = 'position:fixed;top:220px;left:0;width:200px;'
+          + 'height:56px;overflow:hidden;background:#fee;z-index:99999';
+        archive.innerHTML = '<span id="archive-label">Archive here</span>'
+          + '<input type="hidden" data-bz-move-carrier id="archive-carrier">';
+        document.body.appendChild(archive);
+        document.getElementById('it-a').setAttribute('data-bz-group', 'task');
+    }""")
+    try:
+        _pointer(page, "pointerdown", 100, 30)
+        _pointer(page, "pointermove", 100, 40)
+        _pointer(page, "pointermove", 100, 245)
+        during = page.evaluate("""() => ({
+            source: document.getElementById('it-a').parentNode.id,
+            archiveCards: document.querySelectorAll(
+              '#archive [data-bz-draggable]').length,
+            labelTop: document.getElementById('archive-label')
+              .getBoundingClientRect().top,
+            archiveTop: document.getElementById('archive')
+              .getBoundingClientRect().top,
+            previewVisible: getComputedStyle(document.querySelector(
+              '.bz-drag-preview')).visibility === 'visible',
+        })""")
+        _pointer(page, "pointerup", 100, 245)
+        payload = page.evaluate(
+            "() => document.getElementById('archive-carrier').value"
+        )
+        assert during["source"] == "dz"
+        assert during["archiveCards"] == 0
+        assert during["labelTop"] - during["archiveTop"] <= 2
+        assert during["previewVisible"]
+        assert payload and '"to_zone":"archive"' in payload
+    finally:
+        page.evaluate("() => document.getElementById('archive')?.remove()")
+
+
 def test_a_disabled_item_cannot_be_grabbed(page) -> None:
     """The inertia of ``disabled=`` lives in the RUNTIME, not in CSS.
 

@@ -97,7 +97,7 @@ def _base_names(node: ast.ClassDef) -> set[str]:
     return names
 
 
-def _local_server_states(tree: ast.Module) -> set[str]:
+def _local_server_states(module: Module) -> set[str]:
     """The server states declared IN this module.
 
     An app readily derives a common base state; recognising only the
@@ -107,7 +107,7 @@ def _local_server_states(tree: ast.Module) -> set[str]:
     """
     known = _server_state_names()
     local: set[str] = set()
-    for node in ast.walk(tree):
+    for node in module.nodes:
         if isinstance(node, ast.ClassDef) and _base_names(node) & (known | local):
             local.add(node.name)
     return local
@@ -115,10 +115,10 @@ def _local_server_states(tree: ast.Module) -> set[str]:
 
 def check(module: Module) -> list[Finding]:
     """The server-state constructions made from the loop."""
-    names = _server_state_names() | _local_server_states(module.tree)
+    names = _server_state_names() | _local_server_states(module)
 
     findings: list[Finding] = []
-    for func in ast.walk(module.tree):
+    for func in module.nodes:
         if not isinstance(func, ast.AsyncFunctionDef):
             continue
         for node in ast.walk(func):

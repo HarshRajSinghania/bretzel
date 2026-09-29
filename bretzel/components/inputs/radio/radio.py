@@ -141,8 +141,14 @@ class RadioGroup(Component):
         # The radios read this — without it a BOUND group's radios emit no
         # ``name`` at all, so they never serialise and ``on_change`` gets
         # an empty form (the value only rides as namespaced signal state).
+        # Last resort, the group's own identity: radios without a common
+        # ``name`` do not exclude each other — an unnamed, unbound group
+        # let "Standard" and "Express" be ticked together. Prefixed
+        # ``_``, the wire's mark for plumbing: it is never handed to a
+        # ``**kwargs`` handler as if the app had named the field.
         self._radio_name = (
             self._reactive_values.get("name") or attrs.get("name")
+            or (f"_{attrs['id']}" if attrs.get("id") else None)
         )
         return Element(
             tag=self._tag,

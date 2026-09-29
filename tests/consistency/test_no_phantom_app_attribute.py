@@ -84,9 +84,13 @@ _APP = Bretzel(secret_key="g" * 32, mode="dev")
 _WORKTREES = ".claude/worktrees/"
 
 
-def _is_in_a_worktree(path: Path) -> bool:
-    """Le chemin vit-il dans une copie de travail imbriquée ?"""
-    return _WORKTREES in path.as_posix()
+def _is_in_a_worktree(path: Path, root: Path = _ROOT) -> bool:
+    """Le chemin vit-il dans une copie de travail imbriquée SOUS ``root`` ?
+
+    ⚠️ Lu sur le chemin RELATIF à la racine : lancée depuis un worktree, la
+    racine elle-même vit sous ``<dépôt>/.claude/worktrees/<nom>/``.
+    """
+    return path.relative_to(root).as_posix().startswith(_WORKTREES)
 
 
 @lru_cache(maxsize=1)
@@ -96,7 +100,7 @@ def _files() -> tuple[Path, ...]:
         for path in (_ROOT / root).rglob("*"):
             if path.suffix not in (".py", ".md"):
                 continue
-            if "__pycache__" in str(path) or _is_in_a_worktree(path):
+            if "__pycache__" in path.parts or _is_in_a_worktree(path):
                 continue
             out.append(path)
     return tuple(out)
@@ -242,3 +246,10 @@ def test_the_sweep_ignores_nested_worktrees() -> None:
     # Le détecteur mord dans les deux sens.
     assert _is_in_a_worktree(_ROOT / ".claude/worktrees/x/archive/V1/a.py")
     assert not _is_in_a_worktree(_ROOT / "bretzel/server/app.py")
+
+    # Et depuis une racine fabriquée qui EST un worktree : sans elle, les
+    # deux lignes ci-dessus ne distinguent l'absolu du relatif que si la
+    # suite tourne elle-même depuis un worktree.
+    worktree = Path("/depot/.claude/worktrees/voisin")
+    assert not _is_in_a_worktree(worktree / "bretzel/server/app.py", worktree)
+    assert _is_in_a_worktree(worktree / ".claude/worktrees/x/a.py", worktree)

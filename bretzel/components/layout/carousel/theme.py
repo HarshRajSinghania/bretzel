@@ -28,7 +28,7 @@ Slots :
   row, and visibly fall below the track's centre
 - ``track``      : the snapping scrollable container
 - ``slide``      : a child's wrapper — it is what carries the width (so
-  ``per_view``) and the ``snap-start``
+  ``per_view``, through the ``per_view`` table) and the ``snap-start``
 - ``arrow``      : the two buttons, overlaid on the edges
 - ``arrow_prev`` / ``arrow_next`` : their lateral position
 - ``dots``       : the row of dots
@@ -50,6 +50,23 @@ from typing import Any
 #: it unrepresentable was better than adding it there as a special
 #: case.
 DOTS_HIDDEN = "dots_hidden"
+
+
+def _slide_basis(count: int) -> str:
+    """The width of one slide when ``count`` of them share the track.
+
+    ``count`` slides AND the ``count - 1`` gaps between them must fill
+    the track exactly: ``(100% - (count - 1) × gap) / count``. The gap is
+    ``--bz-gap``, which the component sets on the track from the SAME
+    theme class that spaces the slides (``Carousel._gap_length``).
+
+    It was ``basis-1/N``, a third of the track per slide PLUS the gaps:
+    at ``per_view=3`` and the default 12-px gap, the third card overflowed
+    by 24 px — cut by the track's scroll, so it looked cropped.
+    """
+    if count <= 1:
+        return "basis-full"
+    return f"basis-[calc((100%_-_{count - 1}*var(--bz-gap))/{count})]"
 
 CAROUSEL_THEME: dict[str, Any] = {
     "slots": {
@@ -127,6 +144,14 @@ CAROUSEL_THEME: dict[str, Any] = {
     "responsive": {
         DOTS_HIDDEN: "hidden",
     },
+    # ``per_view`` → the slide's width class. A TABLE and not an f-string
+    # at render: declared in ``RESPONSIVE_THEME_KEYS``, it is what the
+    # safelist closes over the breakpoints — the formula carries the
+    # count, so no source file writes ``md:basis-[calc(…/3)]`` literally,
+    # and without the safelist the production CSS would not have it.
+    # Twelve, like the ``grid-cols-N`` Tailwind ships; a larger count is
+    # computed by the same function, dev-only as it always was.
+    "per_view": {str(n): _slide_basis(n) for n in range(1, 13)},
     "sizes": {
         "xs": {
             "arrow": "w-7 h-7",

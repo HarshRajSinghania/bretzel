@@ -48,8 +48,15 @@
  *   $bz.locale.tag()            the current tag ("fr", "en"…)
  *   $bz.locale.monthNames()     12 long names, January first
  *   $bz.locale.monthName(i)     a single one, 0-indexed
- *   $bz.locale.weekdayNames()     7 short names, SUNDAY first
+ *   $bz.locale.weekdayNames()     7 NARROW names ("M", "T"…), SUNDAY first
  *   $bz.locale.weekdayLongNames() the same in full, for a ``title=``
+ *
+ * ⚠️ NARROW, not short: the calendar's column is written in density
+ * steps and its text in text steps, and only the first follows
+ * ``--spacing``. "Wed" / "mer." overflowed their column at three of the
+ * five sizes at the DEFAULT density (measured on 2026-09-29, "LUN.MAR."
+ * stuck together) and at all five at 2.4 px a step. One letter fits any
+ * step; the full name rides the column's ``title=``.
  *
  * ⚠️ Sunday first, always: it is ``Date.getDay()``'s order, and it is
  * the component that rotates the list according to ``weekstart``. A list
@@ -69,6 +76,7 @@
     "July", "August", "September", "October", "November", "December",
   ];
   const FALLBACK_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const FALLBACK_NARROW = FALLBACK_WEEKDAYS.map(function (d) { return d[0]; });
 
   // 2023-01-01 IS a Sunday, and 2023 has twelve months — the two
   // anchors we need. Everything is computed in UTC: building these dates
@@ -88,7 +96,7 @@
         timeZone: "UTC",
       });
       const weekday = new Intl.DateTimeFormat(tag, {
-        weekday: "short",
+        weekday: "narrow",
         timeZone: "UTC",
       });
       // The FULL name, for the column headers' ``title=``. Same memo,
@@ -110,13 +118,11 @@
         }),
       };
     } catch (e) {
-      // The fallback has ONLY abbreviations. ``weekdaysLong`` is
-      // therefore the same thing there: a ``title`` identical to the
-      // visible text is useless but never wrong, where inventing a full
-      // name would be.
+      // The fallback has no full names: the abbreviation is the
+      // longest thing it knows, so it is what the ``title`` carries.
       entry = {
         months: FALLBACK_MONTHS,
-        weekdays: FALLBACK_WEEKDAYS,
+        weekdays: FALLBACK_NARROW,
         weekdaysLong: FALLBACK_WEEKDAYS,
       };
     }

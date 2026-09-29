@@ -41,7 +41,7 @@ BREADCRUMB_THEME: dict[str, Any] = {
         "separator": "text-muted/50 shrink-0",
     },
     "sizes": {
-        "xs": "text-[10px]",
+        "xs": "text-xs",
         "sm": "text-xs",
         "md": "text-sm",
         "lg": "text-base",

@@ -5,26 +5,15 @@ What this screen puts under constraint: ``ui.stepper`` + a preview as a
 alone; here one step's state decides what the next can do, and the screen
 only reads in order.
 
-⚠️ **``ui.file_upload`` in form mode transmits NOTHING to the server**,
-and that is measured, not assumed. The component does place an
-``<input type="file" name="fichier">`` in the parent ``<form>``, but htmx
-only builds a ``FormData`` body if the form carries
-``hx-encoding="multipart/form-data"`` (or the equivalent ``enctype``) —
-and ``grep -rn "hx-encoding" bretzel/`` returns **zero** results:
-``ui.form`` has no prop to say it and never emits the attribute. So the
-body goes out URL-encoded, where a ``File`` does not survive; the handler
-receives an empty string. Verified in the browser: dropping a CSV then
-clicking "Check" shows "Drop a file or paste a CSV".
+The CSV comes in by either of two paths, read by the same handler:
+pasted into the textarea, or dropped on a ``ui.file_upload`` in form
+mode, which leaves with the form's submit (see ``step_drop``). When both
+are given, the file wins.
 
-The screen does not work around it: pasting is the real path, and the
-drop stays there **disabled**, with the reason written beside it. It is
-the work's finding 15.
-
-What the screen does do, on the other hand, and that no app had: **the
-datatable in LIST tier**. Screen 2 mounts it in callable tier over 50 000
-rows; here the rows are in memory and the component filters, sorts and
-paginates on its own. Both tiers of the same component, in the same app,
-on two screens.
+What the screen also does, and that no app had: **the datatable in LIST
+tier**. Screen 2 mounts it in callable tier over 50 000 rows; here the
+rows are in memory and the component filters, sorts and paginates on its
+own. Both tiers of the same component, in the same app, on two screens.
 """
 
 from __future__ import annotations
@@ -75,9 +64,7 @@ class ImportPreview(DatatableState):
 async def start_import(form: ImportDraft, fichier=None) -> None:
     """Read the CSV — dropped or pasted — and move to the check step.
 
-    ``async`` because ``UploadFile.read()`` is; the handlers are indeed
-    awaited by the base layer, unlike the ``@refreshable`` zones which
-    are not (the work's finding 1, still open).
+    ``async`` because ``UploadFile.read()`` is.
 
     ``fichier`` is not declared as a state field: it is the
     ``ui.file_upload``'s ``name=``, and the signature injection passes a

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 
+from bretzel.components.base.events import SERVER_HANDLER_RULE
 from bretzel.lint.corpus import Module
 from bretzel.lint.report import Finding
 
@@ -32,7 +33,7 @@ RULE = "lambda-handler"
 
 def check(module: Module) -> list[Finding]:
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         if not isinstance(node, ast.Call):
             continue
         for keyword in node.keywords:
@@ -51,11 +52,7 @@ def check(module: Module) -> list[Finding]:
                         f"it through `sys.modules`. A lambda has no "
                         f"addressable name — this raises at render time."
                     ),
-                    hint=(
-                        "Write a top-level function in the module and pass "
-                        "it by name. To freeze an argument, "
-                        "`functools.partial(handler, item_id)`."
-                    ),
+                    hint=SERVER_HANDLER_RULE,
                 )
             )
     return findings

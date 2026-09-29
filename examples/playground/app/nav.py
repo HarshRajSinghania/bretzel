@@ -9,7 +9,7 @@ NAV = [
     ("OVERVIEW", [
         ("Home", "/", "home"),
         ("App map", "/app-map", "network"),
-        ("Theme studio", "/theme-studio", "palette"),
+        ("Size ladder", "/ladder", "ruler"),
     ]),
     ("PRIMITIVES", [
         ("Text",     "/text",     "type"),

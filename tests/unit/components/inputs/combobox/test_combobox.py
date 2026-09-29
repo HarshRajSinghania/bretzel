@@ -927,11 +927,11 @@ class TestThemeSizes:
     @pytest.mark.parametrize(
         ("size", "marker"),
         [
-            ("xs", "min-h-[1.75rem]"),
-            ("sm", "min-h-[2rem]"),
-            ("md", "min-h-[2.5rem]"),
-            ("lg", "min-h-[3rem]"),
-            ("xl", "min-h-[3.5rem]"),
+            ("xs", "min-h-7"),
+            ("sm", "min-h-8"),
+            ("md", "min-h-10"),
+            ("lg", "min-h-12"),
+            ("xl", "min-h-14"),
         ],
     )
     def test_size_applies_trigger_height(

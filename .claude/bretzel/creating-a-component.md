@@ -342,6 +342,12 @@ dix renvois « Trap #22 / #33 / #42 » pointaient dans le vide jusqu'au
   `test_declared_event_is_reachable`.
 - Un `bz-data` ne porte que de la **donnée**, jamais un algorithme, et
   jamais un littéral Python (`True`/`None`) — deux gates le tiennent.
+- Un composant dont les méthodes vivent dans un slab runtime
+  (`$bz.<nom>.scope`) écrit son `bz-data` avec `scope_literal`
+  (`base/_wiring.py`) : bascule valeur locale / cellule du magasin,
+  `config=` re-semée dans les deux modes, `fields=` côté client. Un
+  littéral bâti à la main est refusé par
+  `test_scope_literal_debt_only_shrinks`.
 
 **Cluster sélecteur** (Tabs / ToggleGroup / futur Carousel-dots) — driver
 visuel `data-selected="true"` SSR + `bz-attr:data-selected` réactif (PAS

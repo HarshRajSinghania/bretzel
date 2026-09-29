@@ -71,6 +71,8 @@ RULE = "zone-listening-too-widely"
 _MARKS = frozenset({"refreshable"})
 
 _Func = ast.FunctionDef | ast.AsyncFunctionDef
+#: The same, as a tuple: an inline ``A | B`` is rebuilt for every node.
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 def _decorator_call(func: _Func) -> ast.Call | None:
@@ -146,8 +148,8 @@ def check(module: Module) -> list[Finding]:
     """The dependencies a zone carries on another's behalf."""
     functions: dict[str, _Func] = {}
     zones: set[str] = set()
-    for node in ast.walk(module.tree):
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+    for node in module.nodes:
+        if isinstance(node, _FUNCTIONS):
             functions[node.name] = node
             if _decorator_call(node) is not None:
                 zones.add(node.name)

@@ -89,6 +89,16 @@ _RAW_HTML_PREFIXES: tuple[str, ...] = (
     "bz-",
 )
 
+#: The anchor family: attributes that only mean something on an ``<a>``
+#: (or an ``<area>``). Admitted as raw kwargs below, and REFUSED at render
+#: when the element that carries them is not an anchor
+#: (``component._refuse_stray_anchor_attrs``) — the one check that needs
+#: the rendered tag, which this module never sees.
+ANCHOR_ATTRS: frozenset[str] = frozenset({"href", "target", "rel", "download"})
+
+#: The tags where :data:`ANCHOR_ATTRS` mean something.
+ANCHOR_TAGS: frozenset[str] = frozenset({"a", "area"})
+
 #: The EXACT names admitted without a prefix. Two, each with its reason.
 _RAW_HTML_NAMES: frozenset[str] = frozenset(
     {
@@ -108,18 +118,12 @@ _RAW_HTML_NAMES: frozenset[str] = frozenset(
         # visually a button (it lives in a toolbar next to "Clear
         # filters"). Cf. ``datatable.py`` § CSV export.
         #
-        # ⚠️ That is this refusal's honest limit: an HTML attribute's
-        # validity depends on the RENDERED TAG, which ``split_kwargs``
-        # does not know — ``tag=`` is removed by the constructor before
-        # reaching here. So ``ui.button(href=…)`` WITHOUT ``tag="a"``
-        # still passes and stays inert. Closing it would require
-        # validating attribute against tag, that is to say embedding an
-        # HTML table: another project. `bretzel check` does see it, since
-        # it reads the call site.
-        "href",
-        "target",
-        "rel",
-        "download",
+        # Their validity depends on the RENDERED TAG, which
+        # ``split_kwargs`` does not know (``tag=`` is removed before) —
+        # so the check lives at render, cf. :data:`ANCHOR_ATTRS`. Until
+        # 2026-09-29 nothing checked: ``ui.icon_button(href=…)`` rendered
+        # ``<button href=…>`` and the showcase's GitHub icon led nowhere.
+        *ANCHOR_ATTRS,
     }
 )
 

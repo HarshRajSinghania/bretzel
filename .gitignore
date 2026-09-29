@@ -101,3 +101,7 @@ examples/ecole/**/*.db-journal
 # Captures des probes Playwright — des artefacts de mesure, jamais du
 # code. Aucune n' est suivie dans ce dépôt.
 tests/probes/_shots/
+
+# Scratch files left at the root by a session, and Office lock files.
+.tmp-*
+~$*

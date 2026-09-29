@@ -21,10 +21,12 @@ via ``sys.modules`` et rejette les ``<locals>``.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
-from bretzel import Bretzel, page, redirect, ui
+from bretzel import Bretzel, layout, page, redirect, ui
 from bretzel.core.errors import BretzelError
 from bretzel.server.handlers import encode_action_id, sign_action
 
@@ -73,6 +75,48 @@ def plain_page() -> None:
 _app.include(plain_page)
 
 
+@layout
+def coque() -> None:
+    ui.outlet()
+
+
+@layout
+def autre_coque() -> None:
+    ui.outlet()
+
+
+def go_inside() -> None:
+    redirect("/dedans/b?x=1")
+
+
+def go_other_shell() -> None:
+    redirect("/hors-coque")
+
+
+def go_elsewhere() -> None:
+    redirect("https://example.com/x")
+
+
+@page("/dedans/a", layout=coque)
+def dedans_a() -> None:
+    ui.button("Dedans", on_click=go_inside)
+    ui.button("Autre coque", on_click=go_other_shell)
+    ui.button("Ailleurs", on_click=go_elsewhere)
+
+
+@page("/dedans/b", layout=coque)
+def dedans_b() -> None:
+    ui.text("b")
+
+
+@page("/hors-coque", layout=autre_coque)
+def hors_coque() -> None:
+    ui.text("hors")
+
+
+_app.include(dedans_a, dedans_b, hors_coque)
+
+
 @pytest.fixture(autouse=True)
 def _clear_trace():
     _trace.clear()
@@ -91,7 +135,7 @@ def client():
         yield c
 
 
-def _post(client: TestClient, action) -> object:
+def _post(client: TestClient, action, *, current: str | None = None) -> object:
     action_id = encode_action_id(action)
     sig = sign_action(_app.config._action_key, action_id, "")
     return client.post(
@@ -99,7 +143,13 @@ def _post(client: TestClient, action) -> object:
         # htmx pose ``HX-Request`` sur toute requête qu'il émet ; la
         # garde de ``redirect()`` s'appuie dessus, donc le test doit
         # reproduire le vrai câblage plutôt que de le contourner.
-        headers={"X-Bz-Sig": sig, "HX-Request": "true"},
+        headers={
+            "X-Bz-Sig": sig,
+            "HX-Request": "true",
+            # htmx sends the displayed page on every request; it is what
+            # tells ``redirect()`` which layout is already mounted.
+            **({"HX-Current-URL": f"http://testserver{current}"} if current else {}),
+        },
         data={"_args": ""},
     )
 
@@ -118,6 +168,50 @@ class TestActionResponse:
         _post(client, save_and_go)
 
         assert _trace == ["before", "after"]
+
+
+class TestPartialNavigation:
+    """Like a link: a shared layout stays mounted, only its outlet changes."""
+
+    def test_a_shared_layout_swaps_only_its_outlet(self, client) -> None:
+        client.get("/dedans/a")
+        response = _post(client, go_inside, current="/dedans/a")
+
+        assert "HX-Redirect" not in response.headers
+        assert json.loads(response.headers["HX-Location"]) == {
+            "path": "/dedans/b?x=1",
+            "target": "#outlet_coque",
+            "swap": "morph:innerHTML",
+        }
+
+    def test_the_page_answers_that_outlet_without_its_layout(self, client) -> None:
+        """The other half of the contract: the GET htmx then issues is a
+        partial render, not a document swapped into a ``<main>``."""
+        response = client.get(
+            "/dedans/b",
+            headers={"HX-Request": "true", "HX-Target": "outlet_coque"},
+        )
+
+        assert response.status_code == 200
+        assert "<body" not in response.text
+
+    @pytest.mark.parametrize(
+        ("action", "current", "expected"),
+        [
+            (go_other_shell, "/dedans/a", "/hors-coque"),
+            (go_elsewhere, "/dedans/a", "https://example.com/x"),
+            (go_inside, None, "/dedans/b?x=1"),
+        ],
+        ids=["no-shared-layout", "other-origin", "unknown-current-page"],
+    )
+    def test_anything_uncertain_loads_the_whole_document(
+        self, client, action, current, expected
+    ) -> None:
+        client.get("/dedans/a")
+        response = _post(client, action, current=current)
+
+        assert "HX-Location" not in response.headers
+        assert response.headers.get("HX-Redirect") == expected
 
 
 class TestGuards:

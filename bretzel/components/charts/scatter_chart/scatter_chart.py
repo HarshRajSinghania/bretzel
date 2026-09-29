@@ -33,11 +33,16 @@ from typing import Any, ClassVar
 from bretzel.components.base import Component, reactive_prop
 from bretzel.components.base._wiring import theme_context
 from bretzel.components.charts._layers import (
+    apply_fixed_width,
+    plot_svg,
     reject_empty_text_component,
     render_empty_state,
 )
 from bretzel.components.charts._svg import (
+    PLOT_SPAN,
     _fmt,
+    _pct,
+    axis_margin,
     compute_ticks,
     format_value,
     linear_scale,
@@ -47,6 +52,7 @@ from bretzel.components.charts.line_chart.line_chart import (
     _coerce_references,
     _render_axis_layer,
     _render_legend,
+    _render_reference_labels,
     _render_reference_lines,
     _render_x_axis_labels,
     resolve_date_axis_format,
@@ -56,9 +62,10 @@ from bretzel.components.charts.series import Series, coerce_xy_series, coloured_
 from bretzel.core.tree import Element
 from bretzel.render import text
 
+# The left margin is at least this, and grows with the widest y label
+# (``axis_margin``). The right one is ``_layers.PLOT_MARGIN_RIGHT``.
 _MARGIN_LEFT_AXIS = 48
 _MARGIN_LEFT_NO_AXIS = 8
-_MARGIN_RIGHT = 12
 _MARGIN_TOP = 16
 _MARGIN_BOTTOM = 32
 
@@ -72,7 +79,9 @@ class ScatterChart(Component):
     BINDABLE_PROPS: ClassVar[tuple[str, ...]] = ()
     color: str = reactive_prop(default="primary", emit_attr=False)
     size: str = reactive_prop(default="md", emit_attr=False)
-    width: int = reactive_prop(default=600, emit_attr=False)
+    # ``None`` = fill the container; ``N`` = N pixels, capped at the
+    # container. Cf. ``_layers.plot_svg``.
+    width: int | None = reactive_prop(default=None, emit_attr=False)
     show_axis: bool = reactive_prop(default=True, emit_attr=False)
     show_gridlines: bool = reactive_prop(default=True, emit_attr=False)
     show_legend: bool = reactive_prop(default=True, emit_attr=False)
@@ -123,7 +132,7 @@ class ScatterChart(Component):
         theme, _slots, sizes, size_name, color = theme_context(self)
         palette = theme.get("palette", ("primary",))
 
-        width = int(self._reactive_values.get("width") or 600)
+        width = self._reactive_values.get("width")
         show_axis = bool(self._reactive_values.get("show_axis"))
         show_gridlines = bool(self._reactive_values.get("show_gridlines"))
         show_legend = bool(self._reactive_values.get("show_legend"))
@@ -146,6 +155,7 @@ class ScatterChart(Component):
 
         wrapper_attrs = self.emit_attrs()
         wrapper_attrs["class"] = slot("wrapper")
+        apply_fixed_width(wrapper_attrs, width)
         wrapper_attrs.setdefault(
             "bz-data",
             f"$bz.charts.scatterScope({{n_series: {len(series) or 1}}})",
@@ -158,7 +168,7 @@ class ScatterChart(Component):
                 # helper, an empty scatter announced itself as "Line
                 # chart" to the screen reader (audit F24).
                 children=(render_empty_state(
-                    self, width=width, height=height,
+                    self, width=width or 0, height=height,
                     kind=text("chart.scatter"),
                     message=empty_text, icon=self._empty_icon,
                     description=self._empty_description,
@@ -180,28 +190,32 @@ class ScatterChart(Component):
         ymin = y_ticks[0] if y_ticks else raw_ymin
         ymax = y_ticks[-1] if y_ticks else raw_ymax
 
-        margin_left = _MARGIN_LEFT_AXIS if show_axis else _MARGIN_LEFT_NO_AXIS
-        plot_left = margin_left
-        plot_right = width - _MARGIN_RIGHT
+        margin_left = (
+            axis_margin(
+                (format_value(t, self._y_format, self._y_unit) for t in y_ticks),
+                axis_font, floor=_MARGIN_LEFT_AXIS,
+            )
+            if show_axis else _MARGIN_LEFT_NO_AXIS
+        )
         plot_top = _MARGIN_TOP
         plot_bottom = height - _MARGIN_BOTTOM
-        x_scale = linear_scale(xmin, xmax, plot_left, plot_right)
+        # x in PERCENT of the plot — cf. ``_svg.PLOT_SPAN``.
+        x_scale = linear_scale(xmin, xmax, 0.0, PLOT_SPAN)
         y_scale = linear_scale(ymin, ymax, plot_bottom, plot_top)
 
         children: list[Element] = []
 
         if show_gridlines or show_axis:
             children.append(_render_axis_layer(
-                slot, y_ticks, y_scale, plot_left, plot_right,
+                slot, y_ticks, y_scale,
                 axis_font, show_axis, show_gridlines,
                 self._y_format, self._y_unit,
             ))
 
+        # The line behind the dots, its label in front (after them).
         if self._reference_lines:
             children.append(_render_reference_lines(
                 slot, self._reference_lines, y_scale,
-                plot_left, plot_right, axis_font,
-                self._y_format, self._y_unit,
             ))
 
         # Per-series dot groups — visibility binding rides on the
@@ -224,7 +238,7 @@ class ScatterChart(Component):
                 )
                 dot_children.append(Element(tag="circle", attrs={
                     "class": dot_cls,
-                    "cx": _fmt(x_scale(float(x))),
+                    "cx": _pct(x_scale(float(x))),
                     "cy": _fmt(y_scale(float(y))),
                     "r": str(dot_r),
                     "data-bz-display": display,
@@ -235,20 +249,21 @@ class ScatterChart(Component):
                 tag="g", attrs=group_attrs, children=tuple(dot_children),
             ))
 
+        if self._reference_lines:
+            children.append(_render_reference_labels(
+                slot, self._reference_lines, y_scale, axis_font,
+                self._y_format, self._y_unit,
+            ))
+
         children.append(_render_x_axis_labels(
             slot, xmin, xmax, x_scale, plot_bottom,
             axis_font, x_format_effective, self._x_unit,
         ))
 
-        svg_attrs: dict[str, Any] = {
-            "class": slot("svg"),
-            "viewBox": f"0 0 {width} {height}",
-            "width": str(width),
-            "height": str(height),
-            "role": "img",
-            "aria-label": _aria_summary(series, date_axis),
-        }
-        svg = Element(tag="svg", attrs=svg_attrs, children=tuple(children))
+        svg = plot_svg(
+            slot, children, height=height, margin_left=margin_left,
+            aria_label=_aria_summary(series, date_axis),
+        )
 
         wrapper_children: list[Element] = [svg]
         if show_legend and len(series) > 1:

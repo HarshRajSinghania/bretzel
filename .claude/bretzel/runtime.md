@@ -276,6 +276,11 @@ CSS compute la première fois → pas de flash blanc.
   l'envelope), `X-Bretzel-Protocol`, `X-Bretzel-Page-ID` (via `hx-headers` posé sur le **wrapper** `div#bz-page-…`, pas sur `<body>`
   sur le `<body>`, cf. `shell.py`) et `X-Bz-Ts` (timestamp signé — cf.
   anti-replay ci-dessous).
+- Une **navigation** (GET d'une page, boostée ou non) ignore le
+  `X-Bretzel-Page-ID` reçu : elle commence une page neuve, `PageState`
+  compris, et renvoie son id dans ce même en-tête de réponse, que le pont
+  adopte pour les actions suivantes. Les GET sous `/_bretzel/` (refetch,
+  export) gardent l'id de la page qui les envoie.
 - Un POST d'action porte en plus **`X-Bretzel-Zones`** — les `bz-id` des
   zones `@refreshable` que le document a réellement sous les yeux, lues
   au moment de la requête sur `[data-bz-zone]`. Ce n'est pas de la

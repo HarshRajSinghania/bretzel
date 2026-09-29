@@ -110,6 +110,9 @@ SIDEBAR_THEME: dict[str, Any] = {
             "-mx-1.5 px-1.5 "
             "overflow-y-auto overflow-x-hidden"
         ),
+        # Rows sit tight, groups breathe: the hierarchy is the contrast
+        # between this ``gap-0.5`` and the ``mt-4`` of ``section_label``.
+        # The rows' focus ring is INSET, so no gap can be too small for it.
         "section": "flex flex-col gap-0.5",
         # ``font-semibold``, not ``font-bold``: surveyed on 2026-08-15,
         # the catalogue's four micro-capitals are ``divider.label``
@@ -119,7 +122,7 @@ SIDEBAR_THEME: dict[str, Any] = {
         # capital.
         "section_label": (
             "text-xs font-semibold text-muted uppercase tracking-wide "
-            "px-2 py-1 mt-2 "
+            "px-2 pt-1 pb-1.5 mt-4 "
             # Fades on collapse (the rail shows its separator instead).
             # Not ``hidden``: ``display:none`` would kill the fade, cf.
             # ``title_text``.
@@ -401,11 +404,13 @@ SIDEBAR_THEME: dict[str, Any] = {
             "group-data-[open=false]/sidebar:p-0"
         ),
     },
-    # Desktop EXPANDED width preset.
+    # Desktop EXPANDED width preset. In ``rem``, not in spacing steps: a
+    # step follows the density (3 px by default), and a frame's width is
+    # not a control's — ``w-64`` rendered 192 px instead of 256.
     "widths": {
-        "sm": "w-48",
-        "md": "w-64",
-        "lg": "w-80",
+        "sm": "w-[12rem]",
+        "md": "w-[16rem]",
+        "lg": "w-[20rem]",
     },
     # ── A SINGLE axis: what "collapsed" means ────────────────────────
     # Replaces the 2026-08-15 pair ``variant=`` (rail/drawer) +
@@ -509,21 +514,14 @@ SIDEBAR_ITEM_THEME: dict[str, Any] = {
             "active:scale-[0.97] "
             "overflow-hidden whitespace-nowrap "
             "outline-none text-muted "
-            # ⚠️ ``ring-offset-SURFACE``, not ``-background``, and it is not
-            # cosmetic. The ring's offset is PAINTED: it must blend with the
-            # background the row rests on. Yet the aside is ``bg-surface``
-            # (#0f172a) and the ``background`` token is #020617 — DARKER.
-            # Measured in the browser on 2026-08-15:
-            # ``--tw-ring-offset-shadow: 0 0 0 2px rgb(2 6 23)`` on an aside
-            # at ``rgb(15 23 42)``, which draws a black outline around the
-            # focused row instead of an invisible offset.
-            # The catalogue's 30 other ``ring-offset-background`` are right:
-            # those are controls sitting on the PAGE background. The sidebar
-            # (like the navbar) is the special case — it paints its own
-            # surface under its focusable children.
-            "focus-visible:ring-2 focus-visible:ring-(--bz-focus) "
-            "focus-visible:ring-offset-2 "
-            "focus-visible:ring-offset-surface "
+            # The focus ring is drawn INSIDE the row. An outer ring with an
+            # offset left the row by 4 px and covered its neighbours, which
+            # sit 1.5 px away. Inside a solid active row the ``--bz-focus``
+            # ring would vanish (the same hue on itself), so there it takes
+            # the colour written ON the fill.
+            "focus-visible:ring-2 focus-visible:ring-inset "
+            "focus-visible:ring-(--bz-focus) "
+            "data-[active=true]:focus-visible:ring-(--bz-on-solid) "
             # Hover bump aligned with Button's ghost variant (/10
             # rather than /5) so the row clearly responds to pointer.
             "data-[active=false]:hover:bg-text/10 "

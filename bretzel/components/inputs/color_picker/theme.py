@@ -106,7 +106,7 @@ COLOR_PICKER_THEME: dict[str, Any] = {
         },
         "sm": {
             "input_frame": "h-8 px-2", "swatch": "h-5 w-5",
-            "input_field": "text-xs", "clear_button": "h-5 w-5",
+            "input_field": "text-sm", "clear_button": "h-5 w-5",
             "trigger_button": "h-5 w-5", "button_icon": "sm",
         },
         "md": {

@@ -7,6 +7,11 @@ name (auto-wrapped in :class:`Icon`). The visible content being an icon
 with no fallback text, the button needs an **accessible name** —
 ``aria_label="…"`` gives it, and failing that the ``tooltip=`` supplies
 it (cf. :meth:`IconButton.render`).
+
+``href=`` makes it a link, exactly as it makes ``ui.button`` one — an
+``<a>``, with ``external=True`` for a new tab. The same rule, shared in
+``actions/_wiring``: the two were one button with and without text, and
+only one of them could navigate.
 """
 
 from __future__ import annotations
@@ -15,14 +20,17 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from bretzel.components.actions._wiring import (
+    anchor_tag,
     apply_loading_disabled,
     build_loading_spinner,
+    finish_anchor,
     loading_leading_children,
 )
 from bretzel.components.actions.icon_button.theme import ICON_BUTTON_THEME
 from bretzel.components.base import Component, reactive_prop
 from bretzel.components.primitives.spinner import Spinner
 from bretzel.core.tree import Element, Node
+from bretzel.state.scopes.client import ClientBinding
 
 
 class IconButton(Component):
@@ -39,7 +47,7 @@ class IconButton(Component):
     # Same shape as Button — disabled / loading change during async ;
     # icon is design-time. (No ``label``-equivalent — IconButton's icon
     # IS the content, and icon changes via conditional render.)
-    BINDABLE_PROPS: ClassVar[tuple[str, ...]] = ("disabled", "loading")
+    BINDABLE_PROPS: ClassVar[tuple[str, ...]] = ("disabled", "loading", "href")
 
     variant: str = reactive_prop(default="ghost", emit_attr=False)
     size: str = reactive_prop(default="md", emit_attr=False)
@@ -47,6 +55,7 @@ class IconButton(Component):
     type: str = reactive_prop(default="button")
     disabled: bool = reactive_prop(default=False)
     loading: bool = reactive_prop(default=False, emit_attr=False)
+    href: str | None = reactive_prop(default=None, never_code=True)
 
     def __init__(
         self,
@@ -58,6 +67,8 @@ class IconButton(Component):
         type: str | None = None,
         disabled: Any = None,
         loading: Any = None,
+        href: str | ClientBinding | None = None,
+        external: bool = False,
         on_click: Callable[..., Any] | str | None = None,
         on_focus: Callable[..., Any] | str | None = None,
         on_blur: Callable[..., Any] | str | None = None,
@@ -74,6 +85,7 @@ class IconButton(Component):
             type=type,
             disabled=disabled,
             loading=loading,
+            href=href,
             on_click=on_click,
             on_focus=on_focus,
             on_blur=on_blur,
@@ -93,6 +105,10 @@ class IconButton(Component):
         self._icon: Component | None = Component.adopt_slot(
             icon, icon_shortcut=True
         )
+
+        self._external = external
+        anchor_tag(self, href=href, on_click=on_click, type=type,
+                   kwargs=kwargs, name="icon_button")
 
         self._loading_spinner: Spinner | None = build_loading_spinner(self)
 
@@ -145,6 +161,8 @@ class IconButton(Component):
             spinner=self._loading_spinner,
             icon=icon_comp,
         ))
+
+        finish_anchor(self._tag, attrs, external=self._external)
 
         return Element(tag=self._tag, attrs=attrs, children=tuple(children))
 

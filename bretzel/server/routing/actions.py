@@ -57,7 +57,7 @@ from bretzel.server.handlers import (
     verify_action,
 )
 from bretzel.server.idempotency import idempotency_key, idempotent_ttl
-from bretzel.state.fields.validator import FormError
+from bretzel.state.fields.descriptor import assign_fields, coerce_form_value
 from bretzel.state.registry import use_registry
 from bretzel.state.scopes.client import rendering_scope
 from bretzel.state.scopes.server import ServerState
@@ -316,6 +316,21 @@ def _state_params(handler: Callable[..., Any]) -> dict[str, type]:
 
 
 @functools.cache
+def _plain_hints(handler: Callable[..., Any]) -> dict[str, Any]:
+    """The resolved annotations of ``handler``, for the parameters that
+    take a form field as it is (``def reached(step: int)``): the value is
+    coerced to the declared type, like a state field's. Empty when the
+    hints cannot be resolved — the value then passes through unchanged.
+    """
+    try:
+        hints = typing.get_type_hints(handler)
+    except Exception:
+        return {}
+    hints.pop("return", None)
+    return hints
+
+
+@functools.cache
 def _payload_params(handler: Callable[..., Any]) -> dict[str, type]:
     """Map each handler parameter annotated with an :class:`EventPayload`.
 
@@ -372,23 +387,16 @@ async def _hydrate_state(
     door provided for it.
     """
     instance = await state_cls.load()
-    errors: dict[str, str] = {}
-    raw: dict[str, Any] = {}
-    for field_name in state_cls._all_fields():
-        if field_name in form_data:
-            try:
-                setattr(instance, field_name, form_data[field_name])
-            except FormError as exc:
-                # A whole-instance (cross-field) validator rejected — the
-                # message belongs to the FORM, not one field. Route it to
-                # the reserved ``"_"`` key (a form-level Alert reads it).
-                errors["_"] = str(exc)
-                raw[field_name] = form_data[field_name]
-            except ValueError as exc:
-                errors[field_name] = str(exc)
-                # Keep the raw submission so the re-rendered input shows the
-                # user's text instead of the rolled-back clean value.
-                raw[field_name] = form_data[field_name]
+    submitted = {
+        name: form_data[name]
+        for name in state_cls._all_fields() if name in form_data
+    }
+    # ONE batch: the whole-instance validators see the submission whole
+    # (``assign_fields``), and a refusal of theirs goes to ``"_"``.
+    errors, rejected = assign_fields(instance, submitted)
+    # Keep the raw submission of every refused field, so the re-rendered
+    # input shows the user's text instead of the rolled-back clean value.
+    raw = {name: submitted[name] for name in rejected}
     if errors:
         instance.__dict__["_bz_errors"] = errors
     if raw:
@@ -460,7 +468,15 @@ async def _inject_signature_args(
             kwargs[name] = payload_cls.from_wire(raw)
             continue
         if name in form_data:
-            kwargs[name] = form_data[name]
+            annotation = _plain_hints(handler).get(name)
+            if annotation is None:
+                kwargs[name] = form_data[name]
+                continue
+            provided, value = coerce_form_value(form_data[name], annotation)
+            if provided:
+                kwargs[name] = value
+            elif param.default is inspect.Parameter.empty:
+                kwargs[name] = None
 
     # A handler declared with ``**kwargs`` wants to receive every form
     # field that wasn't already bound — typical for generic mutators

@@ -139,6 +139,16 @@ class TestStructure:
         out = _html(mins=(15, 5))
         assert "_mins: [15, 5]" in out
 
+    def test_the_server_owned_bounds_are_reseeded_on_refresh(self) -> None:
+        # ``absorb`` ne réécrit jamais un signal existant : une borne que
+        # le serveur change n'atteint un scope vivant que listée dans
+        # ``_serverSync``. ``_folded`` appartient au client, lui.
+        out = _html(mins=(15, 5))
+        sync = out.split("_serverSync: [", 1)[1].split("]", 1)[0]
+        for key in ("_mins", "_maxs", "_foldable", "_vertical"):
+            assert f"'{key}'" in sync
+        assert "'_folded'" not in sync
+
     def test_a_stray_child_becomes_a_panel(self) -> None:
         # **Chaque enfant direct EST un panneau.** Le groupe enveloppe
         # ce qui n'est pas un ``resizable_panel`` dans la MÊME boîte —

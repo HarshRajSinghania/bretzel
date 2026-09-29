@@ -73,7 +73,6 @@
 # Quatre variables de boucle non lues dans `bar_chart`, toutes des index de
 # série gardés pour la symétrie avec la boucle voisine. À préfixer d'un `_`
 # ou à retirer — vérifier d'abord que la boucle jumelle les utilise.
-4	B007	bretzel/components/charts/bar_chart/bar_chart.py
 
 
 # --- F401 : 4 constats --------------------------------------------------
@@ -82,7 +81,6 @@
 # `__all__`). Les quatre sites sont de la surface publique, donc **ne pas
 # supprimer l'import** : c'est la déclaration qui manque, pas l'usage.
 1	F401	bretzel/render/__init__.py
-2	F401	bretzel/render/partials.py
 1	F401	bretzel/theme/slots.py
 
 
@@ -98,7 +96,6 @@
 # `if/else` là où un ternaire suffirait. Trois des quatre sites portent un
 # commentaire par branche, que le ternaire rendrait illisible. Probablement
 # à ne PAS payer.
-2	SIM108	bretzel/components/inputs/select/select.py
 1	SIM108	bretzel/components/inputs/toggle_group/toggle_group.py
 1	SIM108	bretzel/components/meta/iteration/filter_each.py
 
@@ -125,10 +122,9 @@
 2	RUF007	bretzel/components/data/diagram/layout.py
 
 
-# --- UP047 : 2 constats -------------------------------------------------
+# --- UP047 : 1 constat --------------------------------------------------
 # Fonction générique en `TypeVar` plutôt qu'en syntaxe PEP 695. Purement
 # stylistique ; la cible est `py312`, donc la migration est possible.
-1	UP047	bretzel/lint/corpus.py
 1	UP047	bretzel/server/idempotency.py
 
 

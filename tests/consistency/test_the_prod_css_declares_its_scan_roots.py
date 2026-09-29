@@ -40,8 +40,14 @@ import pytest
 from bretzel.components import (
     dynamic_responsive_classes,
 )
+from bretzel.lint.corpus import _SKIP_DIRS, discover
 from bretzel.theme import Theme, sources, strip_safelist
-from bretzel.theme.build import _content_fingerprint, scan_roots
+from bretzel.theme.build import (
+    _ROOT_SKIP,
+    _SCAN_SKIP,
+    _content_fingerprint,
+    scan_roots,
+)
 from bretzel.theme.css import _SOURCE_INLINE_RE, _SOURCE_PATH_RE
 from bretzel.theme.sources import (
     ENTRY_POINT_GROUP,
@@ -144,20 +150,91 @@ def test_the_fingerprint_follows_a_root_outside_the_cwd(tmp_path: Path) -> None:
     fichier.write_text('CLASSES = "rounded-full"', encoding="utf-8")
     assert _content_fingerprint([tmp_path]) != avant
 
-    # Et le versant licite : un fichier dans un dossier élagué ne compte pas.
-    ignore = tmp_path / "__pycache__"
-    ignore.mkdir()
-    (ignore / "theme.py").write_text("x = 1", encoding="utf-8")
-    assert _content_fingerprint([tmp_path]) == _content_fingerprint([tmp_path])
+
+def planted_tree(racine: Path) -> dict[str, Path]:
+    """Un fichier d'app vivant, et un sous chaque sorte de dossier élagué.
+
+    Un nom par entrée des DEUX listes (thème et lint) : un nom ajouté d'un
+    seul côté est planté, et l'autre côté doit être d'accord avec lui. Le
+    venv porte un nom quelconque et pas de ``site-packages`` sur son
+    chemin : seul son ``pyvenv.cfg`` le désigne. ``archive`` n'est élagué
+    qu'à la racine : planté aussi plus bas, il doit compter.
+    """
+    fichiers = {
+        "app": racine / "app" / "pages.py",
+        "archive nichée": racine / "app" / "archive" / "pages.py",
+        "dossier caché": racine / ".claude" / "worktrees" / "x" / "theme.py",
+        "pyvenv.cfg": racine / "env311" / "lib" / "paquet" / "theme.py",
+    } | {nom: racine / nom / "theme.py" for nom in _SKIP_DIRS | _SCAN_SKIP | _ROOT_SKIP}
+    for fichier in fichiers.values():
+        fichier.parent.mkdir(parents=True, exist_ok=True)
+        fichier.write_text('CLASSES = "rounded-md"', encoding="utf-8")
+    (racine / "env311" / "pyvenv.cfg").write_text("home = x\n", encoding="utf-8")
+    return fichiers
 
 
-def test_scan_roots_prunes_a_root_nested_in_the_cwd() -> None:
+def moves_the_fingerprint(racines: list[Path], fichier: Path) -> bool:
+    """Éditer ``fichier`` change-t-il la clé ? La taille grandit à chaque
+    appel : la réponse ne dépend pas de la résolution du ``mtime``."""
+    avant = _content_fingerprint(racines)
+    fichier.write_text(fichier.read_text(encoding="utf-8") + "\n# édité", encoding="utf-8")
+    return _content_fingerprint(racines) != avant
+
+
+def test_the_fingerprint_ignores_what_the_walk_prunes(tmp_path: Path) -> None:
+    """Les deux versants sur le même arbre : le code d'app compte, rien
+    d'autre. À la racine de ce dépôt, ``.claude/worktrees`` portait à lui
+    seul plus de fichiers que tout le reste."""
+    fichiers = planted_tree(tmp_path)
+    comptes = {nom for nom, f in fichiers.items() if moves_the_fingerprint([tmp_path], f)}
+    assert comptes == {"app", "archive nichée"}
+
+
+def test_the_theme_walk_prunes_like_bretzel_check(tmp_path: Path) -> None:
+    """Les deux marches élaguent le même arbre, ``archive`` racine à part.
+
+    Deux copies de la règle, parce que le thème n'a pas le droit
+    d'importer le lint (``.importlinter``) : ce test les tient ensemble.
+    Le précédent fixe ce que lit le thème ; celui-ci, ce que lit le lint
+    sur le même arbre.
+    """
+    fichiers = planted_tree(tmp_path)
+    lus = set(discover([tmp_path]))
+    assert {nom for nom, f in fichiers.items() if f in lus} == {
+        "app", "archive nichée", "archive",
+    }
+
+
+def test_a_nested_root_is_walked_once(tmp_path: Path) -> None:
     """Le dépôt en développement : ``cwd`` contient le paquet.
 
-    Le parcourir deux fois doublerait le walk sans changer une entrée.
+    Le lire deux fois doublerait ses entrées, donc changerait la clé pour
+    rien — l'ordre et les doublons des racines non plus.
     """
-    racines = scan_roots(f'@source "{Path.cwd().as_posix()}/bretzel";\n')
-    assert racines == [Path.cwd().resolve()]
+    for fichier in (tmp_path / "app.py", tmp_path / "bretzel" / "theme.py"):
+        fichier.parent.mkdir(exist_ok=True)
+        fichier.write_text('CLASSES = "rounded-md"', encoding="utf-8")
+    seul = _content_fingerprint([tmp_path])
+    assert _content_fingerprint([tmp_path, tmp_path / "bretzel"]) == seul
+    assert _content_fingerprint([tmp_path / "bretzel", tmp_path, tmp_path]) == seul
+
+
+def test_scan_roots_keeps_a_package_installed_in_the_apps_venv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``uv`` crée ``.venv`` DANS le dossier de l'app : le paquet y est
+    niché, mais la marche du ``cwd`` élague le venv et n'y descend pas.
+
+    Le jeter comme racine nichée sortait les thèmes du framework de la
+    clé : une mise à jour de Bretzel servait l'ancienne feuille.
+    """
+    paquet = tmp_path / ".venv" / "Lib" / "site-packages" / "bretzel"
+    paquet.mkdir(parents=True)
+    (tmp_path / ".venv" / "pyvenv.cfg").write_text("home = x\n", encoding="utf-8")
+    theme = paquet / "theme.py"
+    theme.write_text('CLASSES = "rounded-md"', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert moves_the_fingerprint(scan_roots(f'@source "{paquet.as_posix()}";\n'), theme)
 
 
 # ── ⑤ La preuve que ça mord — sur un CSS FABRIQUÉ, dans les deux sens ──

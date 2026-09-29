@@ -295,6 +295,12 @@ raison qui était écrite ici.
 C'est une **dérogation assumée pour un catalogue**, pas le modèle d'une app
 produit. Pour une app, la règle du § 4 tient.
 
+`examples/showcase` (la vitrine publique) prend la même dérogation, pour la
+même raison : `app/catalog.py` est l'index écrit de ses pages, et
+`app/routes.py` les monte depuis lui — une ligne là, un fichier dans
+`features/components/`. `test_every_ui_symbol_is_shown_in_the_showcase`
+réclame une page pour tout symbole `ui.*` public.
+
 ---
 
 ## 9. Anti-patterns

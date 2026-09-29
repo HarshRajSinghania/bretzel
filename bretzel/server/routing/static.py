@@ -7,9 +7,10 @@ Three things end up under ``/_bretzel/``:
   production serves ``runtime.min.js``, its reduced form. Cf.
   :func:`_runtime_bundle_for`.
 - ``theme.css``: generated from :class:`Theme.generate_css` at startup.
-- ``style.css``: the Lightning-CSS-compiled output. For phase 1 we
-  serve a tiny placeholder when no compile pipeline is wired; once
-  ``bretzel build`` runs (phase 3), this serves the real bundle.
+- ``style.css``: the stylesheet the Tailwind binary compiles at
+  startup when the CSS pipeline is ``build`` (cf. ``config.css``).
+  Under the ``browser`` pipeline the page compiles its own CSS, and
+  this route serves a placeholder comment.
 
 Cache strategy:
 
@@ -230,6 +231,6 @@ def register_static_routes(
 
 
 _EMPTY_STYLE_CSS = (
-    "/* Placeholder. Run ``bretzel build`` (or wire Lightning CSS at "
-    "startup) to compile your Tailwind utilities into this file. */\n"
+    "/* Placeholder: the browser compiles the Tailwind utilities. Start "
+    "the app with css=\"build\" to compile them into this file. */\n"
 )

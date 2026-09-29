@@ -58,6 +58,7 @@ from bretzel.components.base._wiring import (
     install_value_commands,
     server_sync_marker,
 )
+from bretzel.components.inputs._checkable import sized_slot
 from bretzel.components.inputs._picker_field import (
     anchored_panel,
     clear_button,
@@ -68,7 +69,6 @@ from bretzel.components.inputs._picker_field import (
     value_expr,
 )
 from bretzel.components.inputs.color_picker.theme import COLOR_PICKER_THEME
-from bretzel.core.escape import RawAttrValue
 from bretzel.core.tree import Element, Node
 from bretzel.render import text
 
@@ -206,7 +206,7 @@ class ColorPicker(Component):
         size_cfg = sizes.get(size_key, sizes.get("md", {}))
 
         def sized(slot: str) -> str:
-            return self.slot_class(slot, size_cfg.get(slot, ""))
+            return sized_slot(self, slot, size_cfg)
 
         disabled = bool(self._reactive_values.get("disabled"))
         required = bool(self._reactive_values.get("required"))
@@ -271,9 +271,7 @@ class ColorPicker(Component):
                 # class sets the resting grey, and a ``background``
                 # shorthand would erase it even when empty. Here, absent
                 # value = no inline style = the grey shows.
-                "bz-attr:style": RawAttrValue(
-                    f"{val} ? 'background-color:' + {val} : ''"
-                ),
+                "bz-attr:style": f"{val} ? 'background-color:' + {val} : ''",
                 **({"style": f"background-color:{initial}"} if initial else {}),
             },
             children=(),
@@ -383,8 +381,8 @@ class ColorPicker(Component):
             "data-selected": (
                 "true" if initial.lower() == hexa.lower() else "false"
             ),
-            "bz-attr:data-selected": RawAttrValue(
-                bool_attr(f"({val} || '').toLowerCase() === '{hexa.lower()}'")
+            "bz-attr:data-selected": bool_attr(
+                f"({val} || '').toLowerCase() === '{hexa.lower()}'"
             ),
             # ⚠️ ``value`` and ``open`` BARE, not ``this.value``: a
             # ``bz-on:`` is a DIRECTIVE, evaluated in a ``with($scope)``
@@ -394,9 +392,7 @@ class ColorPicker(Component):
             # round here, the raise killed the runtime's scan for the
             # WHOLE PAGE: no scope initialised any more, and no visible
             # error.
-            "bz-on:click": RawAttrValue(
-                f"{val} = '{hexa}'; open = false"
-            ),
+            "bz-on:click": f"{val} = '{hexa}'; open = false",
         }
         if disabled:
             attrs["disabled"] = True

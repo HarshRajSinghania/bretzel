@@ -41,9 +41,15 @@ browser elsewhere, given the nature of THIS request" — and
 
 from __future__ import annotations
 
+import functools
+import json
+import re
+from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 from starlette.responses import RedirectResponse, Response
+from starlette.routing import compile_path
 
 from bretzel.core.errors import BretzelError
 
@@ -76,6 +82,12 @@ _HX_REDIRECT = "HX-Redirect"
 #: at zero, cf. ``render/shell.py``), which reads it back and renders the
 #: same view.
 _HX_PUSH_URL = "HX-Push-Url"
+
+
+#: The header that makes htmx NAVIGATE without reloading the document:
+#: a GET of ``path`` swapped into ``target``, then a history entry. It is
+#: what a boosted link does, triggered by a response instead of a click.
+_HX_LOCATION = "HX-Location"
 
 
 def _validate(url: str) -> None:
@@ -151,7 +163,14 @@ def redirect_response(request: Any, url: str, *, status_code: int = 302) -> Resp
 
 
 def redirect(url: str) -> None:
-    """Navigate the browser to ``url`` after the current request."""
+    """Navigate the browser to ``url`` after the current request.
+
+    Like a link: when the displayed page and ``url``'s page share a
+    layout, only that layout's outlet changes — the sidebar, its scroll
+    and the client state stay mounted (``HX-Location``). Otherwise, or
+    for another origin, the browser loads the whole document
+    (``HX-Redirect``).
+    """
     from bretzel.render.context import current_context
 
     _validate(url)
@@ -166,7 +185,85 @@ def redirect(url: str) -> None:
             "render context and can answer a real 302. To refuse the page "
             "rather than redirect, abort(401) + @error_page(401)."
         )
-    ctx.set_header(_HX_REDIRECT, url)
+    outlet = _shared_outlet(ctx.app, ctx.request, url)
+    if outlet is None:
+        ctx.set_header(_HX_REDIRECT, url)
+        return
+    ctx.set_header(_HX_LOCATION, json.dumps({
+        "path": url,
+        "target": f"#{outlet}",
+        "swap": "morph:innerHTML",
+    }))
+
+
+@functools.lru_cache(maxsize=512)
+def _route_pattern(path: str) -> re.Pattern[str]:
+    """The regex Starlette itself matches ``@page(path)`` with."""
+    return compile_path(path)[0]
+
+
+def _layout_chain_of(app: Any, path: str) -> list[Callable[..., Any]] | None:
+    """The layout chain of the page serving ``path``, outermost first.
+
+    ``None`` when no page matches: the caller then has nothing to compare
+    and falls back to a full load.
+    """
+    from bretzel.render.pipeline import (  # casse un cycle : render → server
+        _resolve_layout_chain,
+    )
+
+    for fn in getattr(app, "_pages", ()):
+        meta = getattr(fn, "_bz_page", None)
+        if meta is not None and _route_pattern(meta.path).match(path):
+            return _resolve_layout_chain(meta.layout)
+    return None
+
+
+def _shared_outlet(app: Any, request: Any, url: str) -> str | None:
+    """The outlet both the displayed page and ``url``'s page render into.
+
+    It is the answer to "which part of the screen must change": the
+    innermost layout the two pages have in common stays mounted, and the
+    target page renders into its outlet — exactly what a sidebar link
+    does (``components/navigation/_wiring.py``), and exactly what
+    ``server/routing/pages.py`` recognises in ``HX-Target`` to render the
+    page without the layouts already in the browser.
+
+    ``None`` — hence a full load — whenever that cannot be known for
+    sure: another origin, an unknown displayed page (htmx sends it in
+    ``HX-Current-URL``), a path no ``@page`` serves, or two pages that
+    share no layout. Guessing wrong would swap a whole document into a
+    ``<main>``; reloading is merely slower.
+    """
+    target = urlsplit(url)
+    if target.scheme or target.netloc or not target.path.startswith("/"):
+        return None
+    headers = getattr(request, "headers", None)
+    current = headers.get("HX-Current-URL") if headers is not None else None
+    if not current:
+        return None
+    # A mounted app sees its paths prefixed; the ``@page`` patterns are not.
+    root = (getattr(request, "scope", None) or {}).get("root_path", "")
+
+    def local(path: str) -> str:
+        if root and path.startswith(root):
+            return path[len(root):] or "/"
+        return path
+
+    here = _layout_chain_of(app, local(urlsplit(current).path))
+    there = _layout_chain_of(app, local(target.path))
+    if not here or not there:
+        return None
+    shared = None
+    for mine, theirs in zip(here, there, strict=False):
+        if mine is not theirs:
+            break
+        shared = mine
+    if shared is None:
+        return None
+    from bretzel.runtime.protocol import outlet_id_for
+
+    return outlet_id_for(shared.__name__)
 
 
 def push_url(url: str) -> None:

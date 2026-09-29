@@ -79,7 +79,7 @@ from bretzel.components.base import Component, reactive_prop
 from bretzel.components.base._wiring import (
     hidden_carrier_attrs,
     pop_change_handler,
-    server_sync_marker,
+    scope_literal,
 )
 from bretzel.components.inputs.signature_pad.theme import SIGNATURE_PAD_THEME
 from bretzel.core.tree import Element, Node
@@ -317,12 +317,27 @@ class SignaturePad(Component):
 
         # ── Assemblage ───────────────────────────────────────────────
         root_attrs["class"] = self.slot_class("root")
-        root_attrs["bz-data"] = self._build_bz_data(
-            scope_key=scope_key,
-            has_local_value=value_binding is None,
-            initial=initial,
+        # The drawing (pointer, resize, render, publish) lives once in
+        # ``$bz.signaturePad.scope``. Client fields, all declared here:
+        # ``_canvas`` is filled by the ``bz-init`` below (a scope method
+        # has no ``$refs``); ``_strokes`` must survive the rescan without
+        # surviving the canvas — a scope is re-paired by ``bz-id``, like
+        # the signature it carries; ``_base`` is the signature ALREADY
+        # there, painted under the new strokes — assigned from the
+        # image's ``onload``, an undeclared field would wake the scope's
+        # effects for nothing.
+        root_attrs["bz-data"] = scope_literal(
+            "$bz.signaturePad.scope",
+            cell=scope_key,
+            initial=json.dumps(initial),
             binding_path=binding_path,
             server_synced=self._value_server_backed("value"),
+            fields={
+                "_canvas": "null",
+                "_strokes": "[]",
+                "_drawing": "null",
+                "_base": "null",
+            },
         )
         # A scope method has no ``$refs`` — it is here, in directive
         # context, that we capture the canvas into the scope.
@@ -331,56 +346,6 @@ class SignaturePad(Component):
 
         return Element(
             tag=self._tag, attrs=root_attrs, children=tuple(children)
-        )
-
-    @staticmethod
-    def _build_bz_data(
-        *,
-        scope_key: str,
-        has_local_value: bool,
-        initial: str,
-        binding_path: str | None,
-        server_synced: bool,
-    ) -> str:
-        """The instance's ``bz-data``: **data, not code**.
-
-        The drawing (pointer, resize, render, publish) lives once in
-        ``$bz.signaturePad.scope``.
-
-        ``_canvas`` is declared ``null`` then filled by the root's
-        ``bz-init``: a scope method has no access to ``$refs``, only
-        directives do (same constraint and same remedy as Slider,
-        Carousel and Resizable).
-
-        ``_strokes`` lives HERE rather than on the node because it must
-        survive the rescan without surviving the canvas — a scope is
-        re-paired by ``bz-id``, exactly like the signature it carries.
-        """
-        if has_local_value:
-            sync = server_sync_marker(scope_key, enabled=server_synced)
-            state = f"{scope_key}: {json.dumps(initial)},{sync} "
-            target = f"this.{scope_key}"
-        else:
-            assert binding_path is not None
-            state = ""
-            target = binding_path
-
-        return (
-            "{...$bz.signaturePad.scope,"
-            + state
-            + "_canvas: null,"
-            + "_strokes: [],"
-            + "_drawing: null,"
-            # The signature ALREADY THERE, loaded once at hydration and
-            # painted UNDER the new strokes. Declared here rather than
-            # set on the fly on the JS side: an undeclared field becomes
-            # a signal at its first write, so assigning it from the
-            # image's ``onload`` would wake the scope's effects for
-            # nothing.
-            + "_base: null,"
-            + f"_read() {{ return {target}; }},"
-            + f"_write(v) {{ {target} = v; }}"
-            + "}"
         )
 
 

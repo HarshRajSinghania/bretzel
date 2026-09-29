@@ -51,13 +51,18 @@ from bretzel.components.base import (
 )
 from bretzel.components.base._wiring import bool_attr, theme_context
 from bretzel.components.charts._layers import (
+    apply_fixed_width,
+    plot_svg,
     reject_empty_text_component,
     render_axis_layer,
     render_empty_state,
 )
 from bretzel.components.charts._svg import (
+    PLOT_SPAN,
     _fmt,
+    _pct,
     area_path,
+    axis_margin,
     compute_ticks,
     format_value,
     line_path,
@@ -76,9 +81,10 @@ from bretzel.core.tree import Element
 from bretzel.core.tree import TextNode as TextNode
 from bretzel.render import text
 
+# The left margin is at least this, and grows with the widest y label
+# (``axis_margin``). The right one is ``_layers.PLOT_MARGIN_RIGHT``.
 _MARGIN_LEFT_AXIS = 48
 _MARGIN_LEFT_NO_AXIS = 8
-_MARGIN_RIGHT = 12
 _MARGIN_TOP = 16
 _MARGIN_BOTTOM = 32
 
@@ -92,7 +98,9 @@ class LineChart(Component):
     BINDABLE_PROPS: ClassVar[tuple[str, ...]] = ()
     color: str = reactive_prop(default="primary", emit_attr=False)
     size: str = reactive_prop(default="md", emit_attr=False)
-    width: int = reactive_prop(default=600, emit_attr=False)
+    # ``None`` = fill the container; ``N`` = N pixels, capped at the
+    # container. Cf. ``_layers.plot_svg``.
+    width: int | None = reactive_prop(default=None, emit_attr=False)
     # Smooth is the modern default — sharp polylines read as legacy
     # spreadsheet output ; the Catmull-Rom curve looks closer to what
     # users now expect from analytics dashboards. Pass ``smooth=False``
@@ -155,7 +163,7 @@ class LineChart(Component):
         theme, _slots, sizes, size_name, color = theme_context(self)
         palette = theme.get("palette", ("primary",))
 
-        width = int(self._reactive_values.get("width") or 600)
+        width = self._reactive_values.get("width")
         smooth = bool(self._reactive_values.get("smooth"))
         area_fill = bool(self._reactive_values.get("area_fill"))
         show_dots = bool(self._reactive_values.get("show_dots"))
@@ -198,6 +206,7 @@ class LineChart(Component):
         single = len(series) == 1
         wrapper_attrs = self.emit_attrs()
         wrapper_attrs["class"] = slot("wrapper")
+        apply_fixed_width(wrapper_attrs, width)
         # Single is just ``n_series: 1`` — the legend / visibility
         # plumbing stays off (no ``isVisible`` / ``toggleSeries``), but
         # the column hit-detection, crosshair, active dot and following
@@ -211,7 +220,7 @@ class LineChart(Component):
             return Element(
                 tag=self._tag, attrs=wrapper_attrs,
                 children=(render_empty_state(
-                    self, width=width, height=height,
+                    self, width=width or 0, height=height,
                     kind=text("chart.line"),
                     message=empty_text, icon=self._empty_icon,
                     description=self._empty_description,
@@ -228,12 +237,17 @@ class LineChart(Component):
         ymin = y_ticks[0] if y_ticks else raw_ymin
         ymax = y_ticks[-1] if y_ticks else raw_ymax
 
-        margin_left = _MARGIN_LEFT_AXIS if show_axis else _MARGIN_LEFT_NO_AXIS
-        plot_left = margin_left
-        plot_right = width - _MARGIN_RIGHT
+        margin_left = (
+            axis_margin(
+                (format_value(t, self._y_format, self._y_unit) for t in y_ticks),
+                axis_font, floor=_MARGIN_LEFT_AXIS,
+            )
+            if show_axis else _MARGIN_LEFT_NO_AXIS
+        )
         plot_top = _MARGIN_TOP
         plot_bottom = height - _MARGIN_BOTTOM
-        x_scale = linear_scale(xmin, xmax, plot_left, plot_right)
+        # x in PERCENT of the plot — cf. ``_svg.PLOT_SPAN``.
+        x_scale = linear_scale(xmin, xmax, 0.0, PLOT_SPAN)
         y_scale = linear_scale(ymin, ymax, plot_bottom, plot_top)
 
         # Per-index SVG coords + tooltip displays for the hover scope.
@@ -289,20 +303,18 @@ class LineChart(Component):
 
         if show_gridlines or show_axis:
             children.append(_render_axis_layer(
-                slot, y_ticks, y_scale, plot_left, plot_right,
+                slot, y_ticks, y_scale,
                 axis_font, show_axis, show_gridlines,
                 self._y_format, self._y_unit,
             ))
 
-        # Reference lines sit behind the data (rendered before the
-        # series paths) so the data line / area paints over them ;
-        # the label rides at the right edge so it doesn't compete
-        # with the y-axis ticks on the left.
+        # Reference LINES sit behind the data (rendered before the
+        # series paths) so the data line / area paints over them. Their
+        # LABELS are painted after the data — cf.
+        # ``_render_reference_labels``.
         if self._reference_lines:
             children.append(_render_reference_lines(
                 slot, self._reference_lines, y_scale,
-                plot_left, plot_right, axis_font,
-                self._y_format, self._y_unit,
             ))
 
         # Per-series paths : area (optional, behind) → line → dots.
@@ -320,34 +332,41 @@ class LineChart(Component):
                 {"bz-show": f"isVisible({s_idx2})"}
                 if len(series) > 1 else {}
             )
+            paths: list[Element] = []
             if area_fill:
-                children.append(Element(tag="path", attrs={
+                paths.append(Element(tag="path", attrs={
                     "class": slot("area", s_color),
                     "fill": f"url(#{gradient_ids[s_idx2]})",
                     "d": area_path(scaled, baseline_y=plot_bottom, smooth=smooth),
-                    **visibility_attrs,
                 }, children=()))
-            children.append(Element(tag="path", attrs={
+            paths.append(Element(tag="path", attrs={
                 "class": slot("line", s_color),
                 "d": smooth_path(scaled) if smooth else line_path(scaled),
                 "stroke-width": str(stroke_w),
                 "stroke-linecap": "round",
                 "stroke-linejoin": "round",
-                # Normalises ``stroke-dasharray`` / ``-dashoffset`` to
-                # the path's geometric length — the entry-draw
-                # keyframe (``bz-line-draw``) uses dasharray = 1 so
-                # it animates over the full path regardless of how
-                # short the polyline actually is.
-                "pathLength": "1",
-                **visibility_attrs,
+                # The frame below stretches x; the stroke must not
+                # follow, or a vertical segment would come out as thick
+                # as the chart is wide.
+                "vector-effect": "non-scaling-stroke",
             }, children=()))
+            children.append(_stretched_frame(height, paths, visibility_attrs))
             if show_dots:
                 for cx, cy in scaled:
                     children.append(Element(tag="circle", attrs={
                         "class": slot("dot", s_color),
-                        "cx": _fmt(cx), "cy": _fmt(cy), "r": str(dot_r),
+                        "cx": _pct(cx), "cy": _fmt(cy), "r": str(dot_r),
                         **visibility_attrs,
                     }, children=()))
+
+        # Reference labels AFTER the data: a label is text to be read,
+        # and under a curve (or, on a bar chart, under a bar) it was not.
+        # Before the hit layer, which stays on top for the hover.
+        if self._reference_lines:
+            children.append(_render_reference_labels(
+                slot, self._reference_lines, y_scale, axis_font,
+                self._y_format, self._y_unit,
+            ))
 
         # X-axis labels (numeric ticks across the domain).
         children.append(_render_x_axis_labels(
@@ -361,7 +380,9 @@ class LineChart(Component):
         # binding doesn't depend on scope-lookup timing or on querying
         # the wrapper's data attrs at evaluation time — the runtime
         # just indexes a plain JS array literal.
-        xs_literal = "[" + ",".join(_fmt(x) for x in x_svgs) + "]"
+        # Percent STRINGS: ``bz-attr:x1`` writes them as they are, and
+        # ``"37.5%"`` resolves against the plot's width like every other x.
+        xs_literal = "[" + ",".join(f"'{_pct(x)}'" for x in x_svgs) + "]"
 
         # Vertical crosshair line at the active column. Connects the
         # cursor's column to the data so the active dots read as "a
@@ -406,19 +427,13 @@ class LineChart(Component):
         # display string + the data-x anchor fraction the floating
         # tooltip reads to land above the real data column.
         children.append(_render_hit_layer(
-            slot, x_svgs, plot_top, plot_bottom, plot_left, plot_right,
-            displays,
+            slot, x_svgs, plot_top, plot_bottom, displays,
         ))
 
-        svg_attrs: dict[str, Any] = {
-            "class": slot("svg"),
-            "viewBox": f"0 0 {width} {height}",
-            "width": str(width),
-            "height": str(height),
-            "role": "img",
-            "aria-label": _aria_summary(series),
-        }
-        svg = Element(tag="svg", attrs=svg_attrs, children=tuple(children))
+        svg = plot_svg(
+            slot, children, height=height, margin_left=margin_left,
+            aria_label=_aria_summary(series),
+        )
 
         wrapper_children: list[Element] = [svg]
         if show_legend and len(series) > 1:
@@ -626,17 +641,48 @@ def _build_displays(
     return out
 
 def _render_axis_layer(
-    slot, ticks: list[float], y_scale, plot_left: float, plot_right: float,
+    slot, ticks: list[float], y_scale,
     axis_font: int, show_axis: bool, show_gridlines: bool, y_format,
     y_unit: str | None = None,
 ) -> Element:
     """LineChart's vertical axis — the shared layer, with this chart's
     structural group class."""
     return render_axis_layer(
-        slot, ticks, y_scale, plot_left, plot_right, axis_font,
+        slot, ticks, y_scale, axis_font,
         show_axis, show_gridlines, y_format, y_unit,
         group_class="bz-line-axes",
     )
+
+
+def _stretched_frame(
+    height: int, paths: list[Element], attrs: dict[str, Any],
+) -> Element:
+    """A nested ``<svg>`` whose x runs 0 → ``PLOT_SPAN`` across the plot.
+
+    A path's ``d`` takes no percentage, so the curves are drawn in a
+    frame that STRETCHES its x to the plot's width
+    (``preserveAspectRatio="none"``) while y stays in pixels (the
+    viewBox height is the chart's). What must not stretch is written
+    elsewhere: the dots are ``<circle>`` with a percentage ``cx``, in
+    the outer svg, so they stay round; the stroke carries
+    ``vector-effect: non-scaling-stroke``. The curve itself survives the
+    stretch unchanged: a Catmull-Rom control point is an affine
+    combination of the data points, and a stretch is affine.
+
+    ⚠️ That is why the line no longer draws itself with a dash
+    (``pathLength="1"`` + ``stroke-dasharray: 1``): measured in
+    Chromium, the dash is computed on the UNSTRETCHED length while the
+    non-scaling stroke is drawn on the stretched one, so the finished
+    line came out dashed. It reveals by clipping, like the area.
+    """
+    return Element(tag="svg", attrs={
+        "width": "100%",
+        "height": str(height),
+        "viewBox": f"0 0 {_fmt(PLOT_SPAN)} {height}",
+        "preserveAspectRatio": "none",
+        "overflow": "visible",
+        **attrs,
+    }, children=tuple(paths))
 
 
 def _render_x_axis_labels(
@@ -647,7 +693,7 @@ def _render_x_axis_labels(
 
     ``compute_ticks`` rounds outward to the next nice number, so for a
     raw domain like ``(0, 11)`` it returns ``[0, 5, 10, 15]`` — the
-    ``15`` would land past ``plot_right`` and dangle off the chart edge.
+    ``15`` would land past the plot's right edge and dangle off the chart.
     Filter to the in-domain ticks so the axis stops cleanly at the
     data. Same logic applies on the date axis : timestamps past xmax
     would render past the chart.
@@ -659,7 +705,7 @@ def _render_x_axis_labels(
     for tick in ticks:
         children.append(Element(tag="text", attrs={
             "class": label_cls,
-            "x": _fmt(x_scale(tick)),
+            "x": _pct(x_scale(tick)),
             "y": _fmt(plot_bottom + axis_font + 8),
             "font-size": str(axis_font),
             "text-anchor": "middle",
@@ -670,7 +716,7 @@ def _render_x_axis_labels(
 
 def _render_hit_layer(
     slot, x_svgs: list[float], plot_top: float, plot_bottom: float,
-    plot_left: float, plot_right: float, displays: list[str],
+    displays: list[str],
 ) -> Element:
     """Invisible per-index rects driving the crosshair scope.
 
@@ -693,15 +739,15 @@ def _render_hit_layer(
     height = plot_bottom - plot_top
     n = len(x_svgs)
     for i, x in enumerate(x_svgs):
-        prev_x = (x + x_svgs[i - 1]) / 2 if i > 0 else plot_left
-        next_x = (x + x_svgs[i + 1]) / 2 if i < n - 1 else plot_right
+        prev_x = (x + x_svgs[i - 1]) / 2 if i > 0 else 0.0
+        next_x = (x + x_svgs[i + 1]) / 2 if i < n - 1 else PLOT_SPAN
         span = next_x - prev_x
         frac = (x - prev_x) / span if span > 0 else 0.5
         children.append(Element(tag="rect", attrs={
             "class": hit_cls,
-            "x": _fmt(prev_x),
+            "x": _pct(prev_x),
             "y": _fmt(plot_top),
-            "width": _fmt(max(0.0, span)),
+            "width": _pct(max(0.0, span)),
             "height": _fmt(height),
             "data-bz-display": displays[i],
             "data-bz-anchor-x": _fmt(frac),
@@ -712,43 +758,60 @@ def _render_hit_layer(
                    children=tuple(children))
 
 
+def _reference_text(r: Reference, y_format, y_unit: str | None) -> str:
+    """A reference's label: its name, then its value in parens — the
+    value keeps the eye anchored on the threshold. Formatted like the
+    ticks, so it reads as the same scale."""
+    value_str = format_value(float(r.value), y_format, y_unit)
+    return f"{r.label} ({value_str})" if r.label else value_str
+
+
 def _render_reference_lines(
     slot, refs: list[Reference], y_scale,
-    plot_left: float, plot_right: float, axis_font: int,
-    y_format, y_unit: str | None,
 ) -> Element:
-    """Horizontal dashed lines + right-edge labels for threshold annotations.
+    """Horizontal dashed lines for threshold annotations.
 
     ``color=None`` on a ref falls back to ``"muted"`` so a reference
     line without an explicit colour doesn't compete with the series
-    palette. Numeric value formatting matches the y-axis ticks so the
-    visual reads as "this is the same scale".
+    palette.
+
+    The LINES only: they are painted behind the data, their labels in
+    front (:func:`_render_reference_labels`). The two lived in one
+    group, so the label shared the line's depth — and on a bar chart it
+    passed under the bars.
     """
     children: list[Element] = []
     for r in refs:
-        colour = r.color or "muted"
         ty = y_scale(float(r.value))
         children.append(Element(tag="line", attrs={
-            "class": slot("reference_line", colour),
-            "x1": _fmt(plot_left), "x2": _fmt(plot_right),
+            "class": slot("reference_line", r.color or "muted"),
+            "x1": "0", "x2": "100%",
             "y1": _fmt(ty), "y2": _fmt(ty),
             "stroke-dasharray": "4 4",
         }, children=()))
-        # Label sits just above the line at the right edge ; value is
-        # shown in parens to keep the eye anchored on the threshold.
-        value_str = format_value(float(r.value), y_format, y_unit)
-        label = (
-            f"{r.label} ({value_str})" if r.label else value_str
-        )
-        children.append(Element(tag="text", attrs={
-            "class": slot("reference_label", colour),
-            "x": _fmt(plot_right - 4),
-            "y": _fmt(ty - 4),
-            "text-anchor": "end",
-            "font-size": str(axis_font),
-        }, children=(TextNode(label),)))
     return Element(
         tag="g", attrs={"class": "bz-line-refs"},
+        children=tuple(children),
+    )
+
+
+def _render_reference_labels(
+    slot, refs: list[Reference], y_scale, axis_font: int,
+    y_format, y_unit: str | None,
+) -> Element:
+    """The references' labels, just above each line at the plot's right
+    edge — painted AFTER the data, so nothing covers them."""
+    children: list[Element] = []
+    for r in refs:
+        children.append(Element(tag="text", attrs={
+            "class": slot("reference_label", r.color or "muted"),
+            "x": "100%", "dx": "-4",
+            "y": _fmt(y_scale(float(r.value)) - 4),
+            "text-anchor": "end",
+            "font-size": str(axis_font),
+        }, children=(TextNode(_reference_text(r, y_format, y_unit)),)))
+    return Element(
+        tag="g", attrs={"class": "bz-line-ref-labels"},
         children=tuple(children),
     )
 

@@ -213,10 +213,10 @@ class Alert(Component):
         # No auto ``role="alert"`` (interrupt-now semantics, unwarranted
         # for a routine panel) — callers pass it explicitly.
         if show_dismiss:
-            # Component-local ``open`` scope (keyed by ``bz-id``, survives
-            # morphs) the dismiss click mutates ; root ``bz-show``
+            # Component-local ``open`` scope (re-seeded only after a server
+            # ``on_close``, cf. the helper) the dismiss click mutates ; root ``bz-show``
             # collapses the alert. No FOUC pre-stamp — ``open: true``
             # paints visible.
-            attrs.update(dismiss_local_scope())
+            attrs.update(dismiss_local_scope(attrs))
 
         return Element(tag=self._tag, attrs=attrs, children=tuple(children))

@@ -87,15 +87,14 @@ _HUG = {
     # répond oui aussi bien qu'un ``w-fit``, en mieux : elle ne dépend
     # plus du nom du mois affiché.
     "calendar",
-    # ── Ajoutés le 2026-08-25, et ce n'est pas un choix de goût ──────
-    # Leur wrapper est ``w-fit max-w-full``, donc ils huggent — mais
-    # ``_class_decides_width`` testait ``"w-full" in cls``, une
-    # SOUS-CHAÎNE, et ``max-w-full`` la contient. Les deux étaient donc
-    # classés « remplit » et recevaient une enveloppe pleine largeur :
-    # le panneau du tooltip s'ancrait sur la rangée, pas sur le
-    # graphique. Le test est maintenant un MOT (``_FILL_WIDTH_RE``), et
-    # ces deux-là retrouvent leur vraie réponse.
-    "line_chart", "scatter_chart",
+    # ``line_chart`` et ``scatter_chart`` ont quitté cette table le
+    # 2026-09-29 : leur wrapper était ``w-fit max-w-full`` autour d'un SVG
+    # de 600 px fixes, il est ``w-full`` depuis que le tracé est en
+    # pourcentages de son conteneur (``charts/_svg.PLOT_SPAN``). Ils
+    # remplissent, comme ``bar_chart`` — l'enveloppe pleine largeur est
+    # désormais la bonne réponse. (La sous-chaîne ``max-w-full`` qui les
+    # avait mal classés le 2026-08-25 reste traitée par
+    # ``_FILL_WIDTH_RE``.)
 }
 
 

@@ -28,8 +28,11 @@ from typing import Any
 
 BAR_CHART_THEME: dict[str, Any] = {
     "slots": {
-        "wrapper":      "flex flex-col gap-3",
-        "svg":          "block w-full overflow-visible",
+        # Fills its container: the plot is drawn in percentages of it
+        # (``_svg.PLOT_SPAN``). The svg's width is set by
+        # ``_layers.plot_svg`` (container less the axis margins).
+        "wrapper":      "flex flex-col gap-3 w-full min-w-0",
+        "svg":          "block overflow-visible",
         # ``transition-[y,height,opacity]`` morphs the bar on data
         # refresh (grow / shrink smoothly). ``bz-bar-entry`` runs
         # once on first paint and scales the bar up from its
@@ -47,7 +50,13 @@ BAR_CHART_THEME: dict[str, Any] = {
         # ``Reference(color="success")`` paints a green threshold
         # while a bare ``Reference(value=...)`` falls back to muted.
         "reference_line":  "stroke-(--bz-solid)/60",
-        "reference_label": "fill-(--bz-solid)/80 font-medium",
+        # The label is painted OVER the bars (it passed under them), so
+        # it gets a halo in the page colour to stay readable on a fill,
+        # and gives the hover back to the bar beneath.
+        "reference_label": (
+            "fill-(--bz-solid)/80 font-medium pointer-events-none "
+            "stroke-background stroke-3 [paint-order:stroke]"
+        ),
         "value_label":  "fill-text font-medium",
         # A label placed INSIDE a coloured segment (the stacked_100
         # variant), not above a bar: it must contrast with the fill,
@@ -72,6 +81,18 @@ BAR_CHART_THEME: dict[str, Any] = {
         "lg": {"h": 360, "axis": 13, "pad": 0.18, "value": 12},
         "xl": {"h": 440, "axis": 14, "pad": 0.15, "value": 13},
     },
-    # Auto-cycle colours when a multi-series payload omits per-Series colours.
-    "palette": ("primary", "success", "warning", "info", "error", "muted"),
+    # The auto-cycle when a series carries no ``color=``. BRAND colours
+    # first, then status colours, ``error`` last. The identity's author
+    # chose ``primary`` and ``secondary`` as a pair, so they are the two
+    # the framework can trust to differ; a status colour is only
+    # guaranteed to differ from the OTHER status colours
+    # (``test_palette_distinctness``), not from an arbitrary primary. The
+    # old cycle went primary → success, so under a green identity the
+    # first two series came out the same green. ``info`` next, the only
+    # status colour that says nothing; ``error`` last, since a series in
+    # red reads as an alarm.
+    "palette": (
+        "primary", "secondary", "info", "success", "warning", "error",
+        "muted",
+    ),
 }

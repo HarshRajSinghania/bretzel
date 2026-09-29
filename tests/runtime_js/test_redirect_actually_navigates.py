@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import pytest
 
-from bretzel import Bretzel, page, redirect, ui
+from bretzel import Bretzel, layout, page, redirect, ui
 from tests.audit.harness import audit_server, browser_page
 
 pytestmark = pytest.mark.browser
@@ -57,6 +57,30 @@ def arrivee_page() -> None:
 _probe_app.include(depart_page, arrivee_page)
 
 
+def save_in_the_shell() -> None:
+    redirect("/coque/arrivee")
+
+
+@layout
+def coque() -> None:
+    ui.text("menu", id="menu")
+    ui.link("Arrivee", href="/coque/arrivee", id="lien")
+    ui.outlet()
+
+
+@page("/coque/depart", layout=coque, title="depart")
+def coque_depart() -> None:
+    ui.button("Enregistrer", on_click=save_in_the_shell, id="go")
+
+
+@page("/coque/arrivee", layout=coque, title="arrivee")
+def coque_arrivee() -> None:
+    ui.text("arrivee dans la coque", id="arrivee")
+
+
+_probe_app.include(coque_depart, coque_arrivee)
+
+
 def test_click_on_a_redirecting_action_changes_the_url() -> None:
     with audit_server(_probe_app) as base_url:
         with browser_page(base_url, "/depart") as browser:
@@ -71,3 +95,41 @@ def test_click_on_a_redirecting_action_changes_the_url() -> None:
             assert browser.evaluate("() => location.pathname") == _TARGET
             # …et la page d'arrivée s'est bien rendue, pas juste l'URL.
             assert browser.locator("#arrivee").inner_text() == "facture 42"
+
+
+def test_inside_a_shared_layout_only_the_outlet_changes() -> None:
+    """Comme un lien : la coque reste montée, le document n'est PAS
+    rechargé. Le témoin posé sur ``window`` ne survit qu'à ce prix."""
+    with (
+        audit_server(_probe_app) as base_url,
+        browser_page(base_url, "/coque/depart") as browser,
+    ):
+        browser.evaluate("() => { window.__temoin = 'vivant'; }")
+
+        browser.click("#go")
+        browser.wait_for_url("**/coque/arrivee", timeout=5000)
+        browser.wait_for_selector("#arrivee", timeout=5000)
+
+        assert browser.locator("#arrivee").inner_text() == "arrivee dans la coque"
+        assert browser.evaluate("() => window.__temoin") == "vivant"
+        assert browser.locator("#menu").count() == 1
+        assert browser.title() == "arrivee"
+
+
+@pytest.mark.parametrize("trigger", ["#go", "#lien"], ids=["redirect", "link"])
+def test_the_tab_title_follows_a_partial_navigation(trigger: str) -> None:
+    """Une réponse partielle n'a pas de ``<head>`` : le titre voyage dans
+    ``HX-Trigger``. Sans écouteur, l'onglet gardait le titre de la page
+    d'avant, après un lien comme après un ``redirect()``."""
+    with (
+        audit_server(_probe_app) as base_url,
+        browser_page(base_url, "/coque/depart") as browser,
+    ):
+        assert browser.title() == "depart"
+        browser.evaluate("() => { window.__temoin = 'vivant'; }")
+
+        browser.click(trigger)
+        browser.wait_for_selector("#arrivee", timeout=5000)
+
+        assert browser.evaluate("() => window.__temoin") == "vivant"
+        browser.wait_for_function("() => document.title === 'arrivee'", timeout=3000)

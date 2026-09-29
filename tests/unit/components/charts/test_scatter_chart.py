@@ -8,7 +8,6 @@ from bretzel.components.charts.scatter_chart.scatter_chart import ScatterChart
 from bretzel.components.charts.series import Series
 from bretzel.core.serialize import serialize
 
-
 SAMPLE = [(1, 5), (2, 12), (3, 7), (4, 18), (5, 9), (6, 15)]
 
 
@@ -87,8 +86,8 @@ class TestScatterChart:
             out = serialize(ScatterChart(series).render())
         assert "fill-(--bz-solid)" in out
         assert "bz-c-primary" in out
-        assert "bz-c-success" in out
-        assert "bz-c-warning" in out
+        assert "bz-c-secondary" in out
+        assert "bz-c-info" in out
 
     def test_legend_toggle_handlers_on_multi_series(self) -> None:
         series = [

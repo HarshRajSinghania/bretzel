@@ -26,7 +26,7 @@ from bretzel.components.base import Component, reactive_prop, stamp_display_none
 from bretzel.components.base._wiring import (
     anchored_panel_effect,
     expand_fit_wrapper,
-    server_sync_marker,
+    scope_literal,
     teleport_to_body,
     trigger_is_full_width,
 )
@@ -201,14 +201,39 @@ class Tooltip(Component):
         attrs = self.emit_attrs()
         # ``classes=`` set by the metaclass wrap — not here (duplicate).
         attrs["class"] = root_slot
-        attrs["bz-data"] = _build_bzdata(delay, self._enabled_expr())
+        # ``_show`` / ``_hide`` live once in ``$bz.tooltip.scope``. No
+        # value cell: ``open`` and ``_t`` (the pending hover timer) are
+        # CLIENT state — re-seeding them would close a displayed tooltip
+        # on every neighbouring swap. ``_delay`` is server config.
+        #
+        # ``_enabled`` must stay an EXPRESSION re-read on every hover (a
+        # collapsed state, a media query, a ClientBinding), hence a
+        # METHOD override of the slab's constant: as a field it would be
+        # evaluated once, at mount. ``true`` has nothing more to say than
+        # the slab.
+        enabled_expr = self._enabled_expr()
+        attrs["bz-data"] = scope_literal(
+            "$bz.tooltip.scope",
+            fields={"open": "false", "_t": "null"},
+            methods=(
+                [f"_enabled() {{ return !!({enabled_expr}); }}"]
+                if enabled_expr != "true"
+                else []
+            ),
+            config={"_delay": str(delay)},
+        )
         attrs["bz-ref"] = "bzroot"
-        attrs["bz-on:mouseenter"] = "_show()"
+        attrs["bz-on:mouseenter"] = "_show($el)"
         attrs["bz-on:mouseleave"] = "_hide()"
         # Keyboard a11y : focusing inside (e.g. tabbing onto the
         # button) reveals the tooltip without delay.
-        attrs["bz-on:focusin"] = "_show()"
+        attrs["bz-on:focusin"] = "_show($el)"
         attrs["bz-on:focusout"] = "_hide()"
+        # An anchored descendant dispatches `open` when its panel becomes
+        # visible. This also catches keyboard opening while focus remains
+        # in the trigger. A click hides immediately, before that effect.
+        attrs["bz-on:click"] = "_hide()"
+        attrs["bz-on:open"] = "_hide()"
 
         children = list(self._render_children())
         children.append(teleport)
@@ -251,64 +276,3 @@ class Tooltip(Component):
             # browser could see it.
             return "true" if enabled else "false"
         return str(enabled)
-
-    # ── Full-width detection ───────────────────────────────────────────
-
-    # NB : ``_build_bzdata`` lives at module scope below ; it composes
-    # the ``bz-data`` body that holds the open flag + the hover
-    # debounce timer. Positioning is owned by the panel's
-    # ``anchored_panel_effect`` (``$bz.helpers.floating``).
-
-# ── bz-data builder ─────────────────────────────────────────────────────────
-
-
-def _build_bzdata(delay_ms: int, enabled_expr: str = "true") -> str:
-    """Compose the ``bz-data`` object literal for the tooltip root.
-
-    - ``open`` (bool) : drives the panel's display + floating effect.
-    - ``_t`` (timer handle) : pending hover debounce.
-    - ``_show()`` : bails when ``enabled_expr`` is falsy ; otherwise
-      starts the debounce ; on fire flips ``open`` (the panel's
-      ``bz-effect`` then shows + positions it via floating).
-    - ``_hide()`` : clears the debounce + closes.
-
-    ``enabled_expr`` is a JS predicate evaluated on each hover/focus
-    (``"true"`` by default). It's checked at SHOW time, not mount time,
-    so a live condition (collapse state, media query) is honoured as it
-    changes. Positioning is owned by ``$bz.helpers.floating`` (engaged by
-    the panel's ``anchored_panel_effect``).
-    """
-    # ``_show`` / ``_hide`` live once in ``$bz.tooltip.scope``
-    # (``bretzel/runtime/_src/16_accordion.js``). This builder serialised
-    # them per instance while BAKING the configuration into them — the
-    # body contained ``if (!(true)) return;`` and the delay as a literal,
-    # so two tooltips with different delays produced two different CODES.
-    #
-    # ``_enabled`` must stay an EXPRESSION re-read on every hover — a
-    # live condition (a collapsed state, a media query, a ClientBinding)
-    # must be honoured as it changes. The "config as data" switch had
-    # nevertheless emitted it as a FIELD (``_enabled: <expr>``), which
-    # produces exactly the opposite: a field is evaluated once, outside
-    # any effect, and ``absorb`` wraps its snapshot in a signal decoupled
-    # from the store. The comment promised the hover, the code froze at
-    # mount. Only a method body is re-read — hence the override of the
-    # slab's ``_enabled()`` constant. ``_delay`` stays a field: it is a
-    # server-side literal, so real data.
-    enabled_override = (
-        f"_enabled() {{ return !!({enabled_expr}); }},"
-        if enabled_expr != "true"
-        else ""
-    )
-    # ``_delay`` is CONFIG (server-owned) → re-seeded unconditionally.
-    # ``open`` and ``_t`` are NOT: client state (the open panel, the
-    # in-flight timer). Re-seeding them would close a displayed tooltip
-    # on every neighbouring swap.
-    return (
-        "{...$bz.tooltip.scope,"
-        "open: false,"
-        "_t: null,"
-        f"{enabled_override}"
-        f"_delay: {delay_ms},"
-        f"{server_sync_marker('_delay', enabled=True).strip()}"
-        "}"
-    )

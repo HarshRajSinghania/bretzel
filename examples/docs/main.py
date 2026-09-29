@@ -65,7 +65,6 @@ app = Bretzel(
     secret_key=secret_key,
     mode=mode,
     lang="en",
-    languages=("en", "fr"),
 )
 
 

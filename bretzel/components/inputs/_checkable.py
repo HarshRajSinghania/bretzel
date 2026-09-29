@@ -181,18 +181,12 @@ def render_checkable(
 def sized_slot(component: Any, slot: str, size_map: dict[str, str]) -> str:
     """A visual slot's composed class, plus its size entry.
 
-    Both components wrote this join twice each (box + icon, rail +
-    thumb), identically. ``compose_class`` resolves the ``{bg_color}``
-    and adds nothing else: neither variant nor size on a non-root slot.
+    Shared by Checkbox / Switch (box + icon, rail + thumb) and by the
+    colour, month and week pickers, which each wrote it as a local
+    closure. ``slot_class`` resolves the ``{bg_color}`` and adds nothing
+    else: neither variant nor size on a non-root slot.
     """
-    return " ".join(
-        p
-        for p in (
-            component.compose_class(slot, apply_variant_size_modifiers=False),
-            size_map.get(slot, ""),
-        )
-        if p
-    )
+    return component.slot_class(slot, size_map.get(slot, ""))
 
 
 __all__ = ["render_checkable", "sized_slot"]

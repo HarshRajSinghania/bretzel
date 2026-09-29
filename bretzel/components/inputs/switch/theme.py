@@ -46,8 +46,15 @@ SWITCH_THEME: dict[str, Any] = {
         # size keeps ``track − thumb = 4px``, so a uniform 2px inset
         # centres it on all of them. ``transition-transform`` so the slide
         # is the only animated property — colour swaps stay in their lane.
+        # Inset by HALF A STEP, not by a pixel literal. Every size is a
+        # track one step taller than its thumb and ``thumb + travel + 1``
+        # steps wide, so half a step on each side centres the thumb at
+        # any density. ``left-[2px] top-[2px]`` was that half step when a
+        # step was 4 px; at 3 px it sat the thumb 0.5 px low and 1 px
+        # from the far end against 2 px from the near one.
+        # ``test_the_switch_thumb_is_centred_by_construction`` holds it.
         "thumb": (
-            "absolute left-[2px] top-[2px] inline-block rounded-full "
+            "absolute start-0.5 top-0.5 inline-block rounded-full "
             "bg-white shadow-sm "
             "transition-transform duration-200 ease-out"
         ),
@@ -62,7 +69,7 @@ SWITCH_THEME: dict[str, Any] = {
         "xs": {
             "track": "h-3 w-5",
             "thumb": "h-2 w-2 peer-checked:translate-x-2",
-            "label": "text-[10px]",
+            "label": "text-xs",
         },
         "sm": {
             "track": "h-4 w-7",

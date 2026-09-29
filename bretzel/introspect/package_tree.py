@@ -270,11 +270,12 @@ def package_names(root: str = "bretzel") -> tuple[str, ...]:
 
 
 def render_tree(node: PackageNode, *, max_depth: int | None = None) -> str:
-    """The tree as text — what ``bretzel describe <package>`` shows.
+    """The tree as text. No caller in the framework: ``bretzel describe
+    <package>`` renders :func:`render_package`, which does not use it.
 
     ``max_depth`` counts FROM the requested node, not from the root:
-    ``describe bretzel --depth 1`` shows the big blocks,
-    ``describe bretzel.components --depth 1`` shows its groups.
+    ``max_depth=1`` on ``bretzel`` shows the big blocks, on
+    ``bretzel.components`` its groups. The CLI does not expose it.
     """
     lines: list[str] = []
     base = node.depth

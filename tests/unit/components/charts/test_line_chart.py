@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
-
 from bretzel.components.base.testing import render_isolated
 from bretzel.components.charts.line_chart.line_chart import LineChart
 from bretzel.components.charts.series import Series
 from bretzel.core.serialize import serialize
-
 
 SAMPLE = [(0, 5), (1, 12), (2, 7), (3, 15), (4, 9), (5, 18)]
 
@@ -231,8 +228,8 @@ class TestLineChart:
             out = serialize(LineChart(series).render())
         assert "stroke-(--bz-solid)" in out
         assert "bz-c-primary" in out
-        assert "bz-c-success" in out
-        assert "bz-c-warning" in out
+        assert "bz-c-secondary" in out
+        assert "bz-c-info" in out
 
     def test_multi_series_with_mismatched_x_raises(self) -> None:
         import pytest

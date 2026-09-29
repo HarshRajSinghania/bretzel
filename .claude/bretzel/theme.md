@@ -112,7 +112,7 @@ une couleur ajoutée demain est servie sans qu'on y touche.
 la gate ne les juge pas, et le fond contre lequel ils devraient se
 mesurer n'est pas la page. Cf. `todo.md`.
 
-⚠️ **Cette algèbre est écrite DEUX fois.** Le theme studio du playground
+⚠️ **Cette algèbre est écrite DEUX fois.** Le theme studio (`examples/showcase`, page `/studio`)
 ne parle jamais au serveur, donc il la redit en JavaScript
 (`FOREGROUND_JS`). Une modification d'un seul côté fait diverger le CSS
 généré et l'aperçu du studio, sans que rien ne casse — les deux moitiés
@@ -288,11 +288,11 @@ s'écrivent tous deux sous `'sidebar'`, `navbar_section` sous `'navbar'`. Les
 classes qui partagent une clé partagent le **même objet** `THEME` (vérifié :
 92 clés distinctes <!--count:theme_keys-->, 2 partagées).
 
-⚠️ **39 noms de groupes de premier niveau** <!--count:theme_group_names--> dans
+⚠️ **41 noms de groupes de premier niveau** <!--count:theme_group_names--> dans
 le catalogue, pas trois :
 `slots` (89 composants <!--count:theme_slots_group-->),
 `sizes` (46 <!--count:theme_sizes_group-->),
-`variants` (8 seulement <!--count:theme_variants_group-->), puis
+`variants` (9 seulement <!--count:theme_variants_group-->), puis
 `widths`, `gaps`, `paddings`, `modifiers`, `colors`, `shapes`, `statuses`,
 `ratios`, `sides`, `collapse`, `backdrop`… **21 groupes** <!--count:theme_scalar_groups-->
 ne sont pas des tables mais une valeur unique (`hoverable`, `sticky`,
@@ -443,16 +443,56 @@ ce serait un second nom pour les valeurs de Tailwind, donc exactement le
 doublon d'amont que la règle des fontes écarte. Les deux paramètres
 suffisent.
 
-⚠️ **Ce que déplacer la base ne répare pas** : 39 chaînes de thème
-écrivent une taille littérale (`text-[10px]`, `h-[1.75rem]`). Elles sont
-hors de portée d'un jeton, et c'est la dette « `size=` n'atteint pas tous
-les slots » de `todo.md` — pas un trou de ce paramètre.
+⚠️ **Ce que déplacer la base ne répare pas : un littéral.** Une taille
+écrite en valeur (`text-[10px]`) ne suit pas `Theme(text=…)`. Il y en
+avait 31 dans les thèmes de composant, tous passés à `text-xs` le
+2026-09-27 ; les hauteurs en `rem` du combobox (`min-h-[2rem]`, soit 32 px
+quand l'échelle dit 24) sont passées aux crans (`min-h-8`).
 
-### La gate
+### Ce qu'hérite un texte sans `size=`
 
-`tests/consistency/test_a_radius_belongs_to_a_family.py` refuse tout
-`rounded-<cran d'échelle>` et toute largeur littérale dans `bretzel/` —
-thèmes ET runtime JS.
+`<body>` porte `text-base` (`render/shell.py`). `ui.text` et `ui.link`
+n'écrivent aucune taille par défaut, un conteneur nu non plus : sans cette
+classe ils prenaient les **16 px du navigateur**, au-dessus du 14 de
+l'échelle. Mesuré sur l'atelier du cockpit : le texte des messages (16)
+faisait la taille du titre de la conversation (`size="lg"`, 16), et l'app
+avait compensé en posant `size="sm"` 130 fois. Sur `<body>` et pas sur
+`<html>` : le `rem` reste celui du navigateur, donc `--spacing`
+(`0.1875rem`) ne bouge pas.
+
+### Les contrôles d'une rangée partagent une échelle
+
+À palier égal, un bouton, un champ, un select, un sélecteur de date ont la
+**même hauteur ET le même texte** :
+
+| palier | hauteur | texte |
+|---|---|---|
+| `xs` | `h-7` (21 px) | `text-xs` (11) |
+| `sm` | `h-8` (24 px) | `text-sm` (13) |
+| `md` | `h-10` (30 px) | `text-sm` (13) |
+| `lg` | `h-12` (36 px) | `text-base` (14) |
+| `xl` | `h-14` (42 px) | `text-lg` (16) |
+
+Avant le 2026-09-27 la famille des champs écrivait `text-xs` à `sm` quand
+les boutons écrivaient `text-sm` : un champ de recherche à 11 px à côté de
+son bouton à 13, dans la même boîte de 24.
+
+La page `/ladder` du playground pose tous les contrôles côte à côte, une
+rangée par palier, avec le texte que personne ne dimensionne.
+
+### Les gates
+
+- `test_a_radius_belongs_to_a_family.py` refuse tout `rounded-<cran
+  d'échelle>` et toute largeur littérale dans `bretzel/` — thèmes ET
+  runtime JS ;
+- `test_a_text_size_is_a_step.py` refuse toute taille de texte littérale
+  dans `bretzel/` ;
+- `test_control_height_ladder.py` tient le tableau ci-dessus, et
+  **découvre** les contrôles : un slot à `h-10` sur `md` aux cinq paliers
+  doit être déclaré contrôle ou exempté avec sa raison ;
+- `tests/probes/probe_ladder.py` mesure `/ladder` dans Chromium : hauteur
+  et texte par rangée, texte sans taille à `--text-base`, aucun texte
+  visible hors des paliers.
 
 ---
 

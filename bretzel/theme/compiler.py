@@ -1,8 +1,8 @@
 """Subprocess wrapper around the Tailwind v4 / Lightning CSS binary.
 
-Production deployments compile a tree-shaken ``style.css`` once at
-``bretzel build`` time ; ``bretzel dev`` keeps the binary running in
-``--watch`` mode for hot-reload.
+An app whose CSS pipeline is ``build`` compiles a tree-shaken
+``style.css`` once at startup (cf. :mod:`bretzel.theme.build`). The
+``--watch`` mode, :func:`start_lightning_watch`, has no caller yet.
 
 This module owns the *spawn* — finding the binary, invoking it with
 the right flags, surfacing errors with actionable messages. The
@@ -185,11 +185,11 @@ def start_lightning_watch(
 
     ⚠️ **No production caller** (verified 2026-08-01: the repository's
     only call is in ``tests/unit/theme/test_compiler.py``). That is
-    normal — ``bretzel dev`` does not exist yet, and the dev CSS pipeline
-    compiles Tailwind in the browser. This function is the brick for the
-    day Lightning CSS gets wired (a settled decision, cf.
-    ``EVOLUTION.md``); kept rather than removed for that reason, not by
-    oversight.
+    normal — ``bretzel dev`` does not start it: by default the dev CSS
+    pipeline compiles Tailwind in the browser, and ``css="build"``
+    compiles once at startup through :func:`compile_with_lightning`. This
+    function is the brick for the day a watch mode gets wired; kept
+    rather than removed for that reason, not by oversight.
 
     When it is wired: the caller owns the lifecycle —
     ``proc.terminate()`` on shutdown.

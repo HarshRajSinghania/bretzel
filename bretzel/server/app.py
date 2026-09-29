@@ -267,7 +267,8 @@ class Bretzel:
 
         ⚠️ **Dev only.** In production, going out to the network at
         startup would be a surprise; ``python -m bretzel.render.vendor``
-        stays the explicit path, and it is worth even more there
+        stays the explicit path — a missing file is only ANNOUNCED at
+        startup — and it is worth even more there
         (measured on 2026-08-27: ``DOMContentLoaded`` from 644 ms to
         110 ms).
 
@@ -276,6 +277,22 @@ class Bretzel:
         whole startup. It is principle 7 applied to the framework itself.
         """
         if not self.config.is_dev:
+            # Not downloaded, but not silent either: a production page
+            # that quietly depends on three third-party hosts is exactly
+            # what the command exists to avoid, and nothing else says so.
+            from bretzel.render import vendored_assets, vendored_is_available
+
+            missing = [
+                a.filename for a in vendored_assets()
+                if not vendored_is_available(a)
+            ]
+            if missing:
+                print(
+                    f"[bretzel] WARN: {', '.join(missing)} not vendored — "
+                    "the pages will load them from their CDNs.\n"
+                    "[bretzel]       run ``python -m bretzel.render.vendor`` "
+                    "in the app's working directory (e.g. in the image build)."
+                )
             return
         from bretzel.core import call_without_blocking
         from bretzel.render import ensure_vendored

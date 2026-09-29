@@ -14,12 +14,19 @@ que `getComputedStyle` les reflète — `max-h-52`/`max-h-72` ne sont pas dans
 la palette Tailwind par défaut, et une classe qui ne compile pas est
 invisible en SSR. Seul un vrai Chromium tranche.
 
-Mesures (xs < md < xl, strictement) :
-1. Pills : font-size réelle.
+Mesures (xs < md < xl, strictement — sauf au plancher, cf. plus bas) :
+1. Pills : hauteur réelle, et font-size.
 2. Chevron : taille du glyphe (font-size — jamais w/h, cf. traps.md).
 3. Panel : max-height effective.
 4. Compteur "N / total" : font-size.
 5. Zéro erreur console. Screenshot.
+
+⚠️ Le TEXTE des pills et du compteur vaut 11 px à ``xs`` comme à ``md``,
+et c'est voulu : ``text-xs`` est le plancher de l'échelle depuis que les
+``text-[10px]`` sont interdits (2026-09-27,
+``test_a_text_size_is_a_step``). Il se juge donc ``xs <= md < xl`` ; la
+pill, elle, grandit STRICTEMENT par sa hauteur (``h-4`` < ``h-5`` <
+``h-6``), et c'est elle qui prouve que ``size=`` descend jusqu'à elle.
 
 Run :  py tests/probes/probe_picker_size.py
 """
@@ -69,6 +76,7 @@ _MEASURE_JS = """
 
     return {
         pill:    size(pill, 'fontSize'),
+        pillBox: pill ? pill.closest('[class*="h-"]').getBoundingClientRect().height : 0,
         chevron: size(q("iconify-icon[icon*='chevron']"), 'fontSize'),
         panel:   size(q('[role=listbox]'), 'maxHeight'),
         counter: size(q("[class*='tabular-nums']"), 'fontSize'),
@@ -77,9 +85,11 @@ _MEASURE_JS = """
 """
 
 
-def strictly_increasing(values: dict[str, float]) -> bool:
+def rises(values: dict[str, float], *, floor: bool = False) -> bool:
+    """``xs < md < xl`` — or ``xs <= md`` when ``xs`` may sit on the
+    scale's floor with ``md``."""
     xs, md, xl = (values[s] for s in SIZES)
-    return 0 < xs < md < xl
+    return xs > 0 and (xs <= md if floor else xs < md) and md < xl
 
 
 def measure(page, kind: str) -> None:
@@ -88,16 +98,17 @@ def measure(page, kind: str) -> None:
     got = {
         size: page.evaluate(_MEASURE_JS, f"#{kind}-{size}") for size in SIZES
     }
-    for axis, label in (
-        ("pill", "pills"),
-        ("chevron", "chevron"),
-        ("panel", "panel max-height"),
-        ("counter", "compteur"),
+    for axis, label, floor in (
+        ("pillBox", "pills (hauteur)", False),
+        ("pill", "pills (texte)", True),
+        ("chevron", "chevron", False),
+        ("panel", "panel max-height", False),
+        ("counter", "compteur", True),
     ):
         values = {s: got[s][axis] for s in SIZES}
         check(
-            f"{kind} — {label} suit size (xs < md < xl)",
-            strictly_increasing(values),
+            f"{kind} — {label} suit size (xs {'<=' if floor else '<'} md < xl)",
+            rises(values, floor=floor),
             str(values),
         )
 

@@ -94,6 +94,41 @@
         return (file.type || '').startsWith('image/');
     }
 
+    // A pasted screenshot reaches the page as ``image.png`` — every one
+    // of them: three captures pasted would be three files of the same
+    // name. It is renamed after the moment it was pasted; a real file
+    // copied from the file manager keeps its own name.
+    const GENERIC_PASTE_NAME = /^image\.(\w+)$/i;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function pastedName(file, stamp, index) {
+        const found = GENERIC_PASTE_NAME.exec(file.name || 'image.png');
+        if (!found) return file.name;
+        return 'pasted-' + stamp + (index ? '-' + (index + 1) : '') +
+            '.' + found[1].toLowerCase();
+    }
+
+    // The files a paste carries, or none. ``text/plain`` among the types
+    // means the paste is TEXT that happens to come with a picture — Excel
+    // cells and Word paragraphs both put a rendering of themselves on the
+    // clipboard: the text must land in the field, and nothing be joined.
+    function filesOfPaste(data) {
+        if (!data || !data.files || data.files.length === 0) return [];
+        const types = Array.from(data.types || []);
+        if (types.indexOf('text/plain') !== -1) return [];
+        const now = new Date();
+        const stamp = now.getFullYear() + pad(now.getMonth() + 1) +
+            pad(now.getDate()) + '-' + pad(now.getHours()) +
+            pad(now.getMinutes()) + pad(now.getSeconds());
+        return Array.from(data.files).map((file, i) => {
+            const name = pastedName(file, stamp, i);
+            return name === file.name ? file : new File([file], name, {
+                type: file.type, lastModified: file.lastModified,
+            });
+        });
+    }
+
     function makeScope(opts) {
         const acceptList = opts.accept
             ? String(opts.accept).split(',').map((s) => s.trim()).filter(Boolean)
@@ -343,6 +378,36 @@
                 return false;
             },
 
+            // ── Paste (``paste=True``) ─────────────────────────────
+            // Called from the root's ``bz-init``, so ``this`` is the
+            // reactive scope. The listener sits on the enclosing
+            // ``<form>`` — a paste fires on the FOCUSED element, and the
+            // one focused is the field the person writes in, not the
+            // picker — or on the root when there is no form. A paste
+            // that carries files adds them as a pick would; one that
+            // carries text is left to the field (``filesOfPaste``).
+            // No unmount hook in V3 (cf. above): a root that has left
+            // the DOM — a zone redrawn — unsubscribes at its next paste.
+            watchPaste() {
+                const self = this;
+                const root = self._el;
+                if (!root) return;
+                const host = root.closest('form') || root;
+                function onPaste(evt) {
+                    if (!root.isConnected) {
+                        host.removeEventListener('paste', onPaste);
+                        return;
+                    }
+                    const native = root.querySelector('input[type=file]');
+                    if (native && native.disabled) return;
+                    const pasted = filesOfPaste(evt.clipboardData);
+                    if (pasted.length === 0) return;
+                    evt.preventDefault();
+                    self.handleFiles(pasted);
+                }
+                host.addEventListener('paste', onPaste);
+            },
+
             // ── Browse-trigger click (delegated to native input) ──
             openPicker() {
                 const native = this._el && this._el.querySelector('input[type=file]');
@@ -417,5 +482,7 @@
         };
     }
 
-    window.$bz.fileUpload = { makeScope: makeScope, formatSize: formatSize };
+    window.$bz.fileUpload = {
+        makeScope: makeScope, formatSize: formatSize, filesOfPaste: filesOfPaste,
+    };
 })();

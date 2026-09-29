@@ -249,10 +249,16 @@
       _enabled() {
         return true;
       },
-      _show() {
+      _show(root) {
         if (!this._enabled()) return;
+        // A tooltip on a popup trigger must not cover the opened panel.
+        // Select, combobox, dropdown and other triggers expose this state
+        // through aria-expanded. Check again after the delay: the popup
+        // may open between focusin/mouseenter and the timer firing.
+        if (root && root.querySelector('[aria-expanded="true"]')) return;
         clearTimeout(this._t);
         this._t = setTimeout(() => {
+          if (root && root.querySelector('[aria-expanded="true"]')) return;
           this.open = true;
         }, this._delay);
       },

@@ -54,7 +54,7 @@ from bretzel.components.base import (
 from bretzel.components.base._wiring import (
     bool_attr,
     hidden_carrier_attrs,
-    server_sync_marker,
+    scope_literal,
     unwrap_transparent,
 )
 from bretzel.components.base._wiring import (
@@ -62,100 +62,6 @@ from bretzel.components.base._wiring import (
 )
 from bretzel.components.navigation.tabs.theme import TABS_THEME
 from bretzel.core.tree import Element
-
-# ───────────────────────────────────────────────────────────────────────────
-# bz-data builder — V3 scope object for the tabs root
-# ───────────────────────────────────────────────────────────────────────────
-
-
-def _build_x_data(
-    *,
-    scope_key: str,
-    has_local_value: bool,
-    initial_value: str,
-    binding_path: str | None,
-    server_synced: bool,
-    url_param: str | None = None,
-) -> str:
-    """Return the ``bz-data`` object literal string for the tabs root.
-
-    Two shapes, both driven by whatever the panels / tabs read as their
-    "active id" expression (``active_expr``, built alongside this) :
-
-    - **Local mode** : a local ``active : "<id>"`` signal. ``setTab``
-      mutates ``this.value`` ; the directives read the bare ``value``
-      signal. When the value is server-backed (``value=state.field``),
-      the field also carries ``_serverSync: ['value']`` so the bridge
-      re-adopts the fresh server value on a @refreshable morph
-      (idiomorph preserves the live signal otherwise — cf.
-      ``03_scope.js`` ``resyncScopes`` and ``traps.md`` § "a
-      server-bound value follows the refresh"). A plain literal
-      (``value="a"``) omits it so a user's tab click survives an
-      unrelated section refresh — same gate as Select / Slider.
-    - **Binding mode** : NO local field and — critically — **no
-      ``get active()`` getter**. The scope's ``absorb`` (03_scope.js)
-      evaluates every declared key ONCE and freezes it into a local
-      signal ; a getter would be called a single time and its result
-      baked into a dead ``value`` signal, disconnected from the store
-      — so ``setTab`` (writing ``$bz.state.<path>``) and an external
-      writer (a Select bound to the same field) would move the store
-      while the tab / panel directives, reading the frozen signal, never
-      update. Instead the directives read ``$bz.state.<path>`` DIRECTLY
-      (a tracked store cell) and ``setTab`` reads / writes the same
-      path. Same idiom as Select — cf. its "No live ``get value()``"
-      docstring, and ``traps.md`` § "scope getter frozen by absorb".
-      No ``_serverSync`` — the value lives in ``$bz._store``, patched by
-      the envelope, never on a scope signal.
-
-    Method shorthands run with ``this`` bound to the scope proxy (the
-    runtime binds helpers to the proxy — cf. ``03_scope.js``). In
-    local mode ``setTab`` goes through ``this.value`` (the signal) ; in
-    binding mode it reads / writes ``$bz.state.<path>`` directly (there
-    is no scope ``value``).
-
-    No ``updateIndicator`` : the single-style strip draws its active
-    underline in pure CSS (``data-[selected=true]:border-{color}``), so
-    the scope carries only the active-value state + its setter.
-    """
-    initial_js = json.dumps(initial_value)
-    if has_local_value:
-        # ``scope_key`` comes from ``_scope_keys`` — no longer a
-        # hard-coded literal, the same source for the signal AND the
-        # ``_serverSync``, they can no longer diverge.
-        sync = server_sync_marker(scope_key, enabled=server_synced)
-        local_field = f"{scope_key}: {initial_js},{sync} "
-        active_read = f"this.{scope_key}"
-        write_target = f"this.{scope_key}"
-    else:
-        assert binding_path is not None
-        local_field = ""
-        # Read / write the tracked store cell directly — no scope getter
-        # (absorb would freeze it, cf. docstring).
-        active_read = binding_path
-        write_target = binding_path
-
-    # ``setTab`` lives once in ``$bz.tabs.scope``
-    # (``bretzel/runtime/_src/16_accordion.js``) — it was not big, but it
-    # was serialised per instance, and its ``_read``/``_write`` is
-    # exactly the indirection Pagination and Accordion already use to
-    # cover both a local field AND a binding with the same methods.
-    #
-    # (The ``change`` dispatch can NOT live in a scope method: the V3
-    # proxy exposes neither ``$refs`` nor ``$nextTick`` there. It is the
-    # hidden input's ``bz-effect`` that redoes it when the value moves.)
-    # ``_url``: the parameter's name, not its value. ``setTab`` reads it
-    # to push the address after writing the signal, and ``_urlInit`` to
-    # re-wire the back button. Absent when nobody asked for an address —
-    # so the whole mechanism stays inert by default.
-    url_field = f"_url: {json.dumps(url_param)}," if url_param else ""
-    return (
-        "{...$bz.tabs.scope,"
-        + local_field
-        + url_field
-        + f"_read() {{ return {active_read}; }},"
-        + f"_write(v) {{ {write_target} = v; }}"
-        + "}"
-    )
 
 
 def _tab_from_url(param: str) -> str:
@@ -316,7 +222,7 @@ class Tabs(Component):
         # The "active id" expression the tab / panel directives read AND
         # the hidden input mirrors : the bare local ``value`` signal in
         # local mode, the tracked ``$bz.state.<path>`` store cell in
-        # binding mode (NO scope getter — cf. ``_build_x_data``). Both
+        # binding mode (NO scope getter — cf. ``scope_literal``). Both
         # are reactive, so a click (``setTab``) or an external writer (a
         # Select bound to the same field) re-runs every ``bz-show`` /
         # ``bz-attr:data-selected`` that reads it.
@@ -324,13 +230,21 @@ class Tabs(Component):
         # ``bz-attr:value`` on the hidden input reads the same expression.
         value_expr = active_expr
 
-        x_data = _build_x_data(
-            scope_key=scope_key,
-            has_local_value=value_binding is None,
-            initial_value=initial_value,
+        # ``setTab`` lives once in ``$bz.tabs.scope`` (``16_accordion.js``).
+        # ``_url``: the parameter's NAME, not its value — ``setTab`` pushes
+        # the address after writing, ``_urlInit`` re-wires the back
+        # button. Absent when nobody asked for an address, so the whole
+        # mechanism stays inert by default. (The ``change`` dispatch
+        # cannot live in a scope method: the proxy exposes neither
+        # ``$refs`` nor ``$nextTick`` there — the hidden input's
+        # ``bz-effect`` does it.)
+        x_data = scope_literal(
+            "$bz.tabs.scope",
+            cell=scope_key,
+            initial=json.dumps(initial_value),
             binding_path=binding_path,
             server_synced=value_server_backed,
-            url_param=url_param,
+            fields={"_url": json.dumps(url_param)} if url_param else None,
         )
 
         # ── Walk children, split into tabs and panels ────────────────
@@ -533,7 +447,7 @@ class Tab(Component):
         # ``active_expr`` is the active-id read handed down by
         # ``Tabs.render`` : the bare ``value`` scope signal in local
         # mode, or the tracked ``$bz.state.<path>`` store cell in binding
-        # mode (NO scope getter — cf. ``_build_x_data``). Both resolve in
+        # mode (NO scope getter — cf. ``scope_literal``). Both resolve in
         # the directive's ``with($scope)`` wrap ; ``this.value`` would
         # read the DOM element, not the scope (cf. ``traps.md`` §
         # "this.X in a directive").

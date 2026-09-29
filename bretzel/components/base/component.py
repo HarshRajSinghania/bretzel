@@ -16,6 +16,8 @@ from collections.abc import Iterable, Mapping
 from typing import Any, ClassVar, Final
 
 from bretzel.components.base.attrs import (
+    ANCHOR_ATTRS,
+    ANCHOR_TAGS,
     EVENT_PATTERN,
     ComponentDefinitionError,
     ComponentUsageError,
@@ -1056,7 +1058,9 @@ class Component(metaclass=_ComponentMeta):
             ctx.parent_stack.pop()
 
     @staticmethod
-    def adopt_slot(value: Any, *, icon_shortcut: bool = False) -> Any:
+    def adopt_slot(
+        value: Any, *, icon_shortcut: bool = False, icon_size: str | None = None,
+    ) -> Any:
         """Normalise a slot value before storing it on a component.
 
         Used by components that handle their own slot kwargs outside
@@ -1075,13 +1079,20 @@ class Component(metaclass=_ComponentMeta):
         Returns ``None`` for ``None``, the converted/detached value
         otherwise. Strings without ``icon_shortcut`` flow through
         unchanged (e.g. plain prefix text).
+
+        ``icon_size`` sizes the Icon the shortcut BUILDS — a name or a
+        binding —, so a component whose ``sizes`` table carries an
+        ``icon_size`` per step (Badge, EmptyState, Input) passes it here
+        instead of building the Icon itself. An Icon the caller built is
+        left alone: its size is an explicit choice.
         """
+        sized = {"size": icon_size} if icon_size else {}
         if value is None:
             return None
         if isinstance(value, str) and icon_shortcut:
             from bretzel.components.primitives.icon import Icon
 
-            value = Icon(value)
+            value = Icon(value, **sized)
         if icon_shortcut and isinstance(value, ClientBinding):
             # Reactive icon : let Icon own the binding → :icon plumbing
             # (cf. primitives/icon/icon.py Task 7). Without this, the
@@ -1094,7 +1105,7 @@ class Component(metaclass=_ComponentMeta):
             # the diagnostic without changing runtime behaviour.
             from bretzel.components.primitives.icon import Icon
 
-            value = Icon(typing.cast(Any, value))
+            value = Icon(typing.cast(Any, value), **sized)
         if isinstance(value, Component):
             Component._detach_from_parent(value)
         return value
@@ -2626,6 +2637,30 @@ def finish_render(component: Component, node: Node) -> Node:
     return _apply_universal_modifiers(component, node)
 
 
+def _refuse_stray_anchor_attrs(component: Component, node: Node) -> None:
+    """A link attribute the caller put on an element that is not a link.
+
+    ``href`` / ``target`` / ``rel`` / ``download`` are admitted as raw
+    kwargs because ``tag="a"`` makes them legitimate — but on a
+    ``<button>`` or a ``<div>`` they do NOTHING, and nothing said so: a
+    ``ui.icon_button(href=…)`` rendered a dead ``<button href>``. Checked
+    here because it is the first place that knows the rendered tag.
+    Components that take ``href=`` as their OWN parameter consume it
+    before this point; only what the caller slipped through is judged.
+    """
+    if not isinstance(node, Element) or node.tag in ANCHOR_TAGS:
+        return
+    stray = sorted(ANCHOR_ATTRS & component._raw_attrs.keys())
+    if stray:
+        name = type(component).__name__
+        raise ComponentUsageError(
+            f"{name} renders a <{node.tag}>, where {', '.join(stray)} does "
+            f"nothing — the element would not be a link. Use a component "
+            f"that takes `href=` (ui.button, ui.icon_button, ui.link, "
+            f"ui.card…), or `tag=\"a\"` if an anchor is really meant."
+        )
+
+
 def _apply_universal_modifiers(component: Component, node: Node) -> Node:
     """Apply ``classes`` / ``visible`` / ``tooltip`` modifiers to a
     freshly-rendered component node. Called by the metaclass wrap around
@@ -2638,6 +2673,8 @@ def _apply_universal_modifiers(component: Component, node: Node) -> Node:
     # ── visible = literal False : skip the entire render ──────────────
     if visible is False:
         return FragmentNode(children=())
+
+    _refuse_stray_anchor_attrs(component, node)
 
     # ── The colour BRIDGE: bz-c-<colour> on the true root ─────────────
     # Here and not in ``compose_class`` for the reason that already moved

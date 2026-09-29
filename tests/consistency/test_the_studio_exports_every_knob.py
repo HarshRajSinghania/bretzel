@@ -36,7 +36,7 @@ import re
 import pytest
 
 from bretzel.theme import Theme
-from examples.playground.features import theme_studio
+from examples.showcase.lib import studio as theme_studio
 
 #: Preuve de morsure : le lecteur de mots-clés du gabarit, sur ses DEUX
 #: versants. Un plancher dit que la population n'est pas vide ; il ne dit
@@ -128,7 +128,7 @@ def test_every_knob_reaches_the_exported_code(knob: str) -> None:
         f"la sortie reste un `Theme(...)` valide, simplement amputée, "
         f"donc rien à l'écran ne le dira.\n"
         f"  Répare `export_expression()` dans "
-        f"`examples/playground/features/theme_studio.py`."
+        f"`examples/showcase/lib/studio.py`."
     )
 
 

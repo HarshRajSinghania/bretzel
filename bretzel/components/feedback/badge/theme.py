@@ -16,7 +16,7 @@ The sizing of the close button's icon is NOT a slot: it lives in
 
 Note : no ``icon`` slot — Badge's leading/trailing icons are pre-built
 :class:`Icon` instances sized via the theme's ``sizes[size].icon_size``
-(see ``_adopt_icon`` in ``badge.py``). Their own class handles styling.
+(``Component.adopt_slot(icon_size=…)`` in ``badge.py``). Their own class handles styling.
 
 Variants :
 - ``soft``    : tinted bg + coloured text (default — subtle)
@@ -112,7 +112,7 @@ BADGE_THEME: dict[str, Any] = {
     },
     "sizes": {
         "xs": {
-            "root": "px-1.5 py-0 text-[10px] h-4",
+            "root": "px-1.5 py-0 text-xs h-4",
             "close": "h-3 w-3",
             "icon_size": "xs",
             "close_icon_size": "xs",

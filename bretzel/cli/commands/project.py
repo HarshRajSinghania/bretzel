@@ -10,6 +10,31 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
+#: What an AI agent working on the generated app reads first: a PROCESS
+#: and pointers, nothing else. This file is written once, then frozen in
+#: the project while Bretzel moves on — so the API and its rules stay
+#: where they are read live, at the installed version: the index header,
+#: the cards. The tests run every command cited here on a new project.
+AGENTS_GUIDE = dedent(
+    """\
+    # Working on this Bretzel app
+
+    ## Read before writing
+
+    - `bretzel describe` — the index of the whole surface. Its header holds
+      the rules a first draft gets wrong.
+    - `bretzel describe ui.button refreshable PageState` — the full cards.
+      Ask for every card you need in ONE call.
+
+    ## Check before claiming it works
+
+    - `bretzel check app` — fix every finding in one pass, then run it once
+      more.
+    - `bretzel probe app.main:app` — drives the app in a real browser and
+      prints one verdict.
+    """
+)
+
 
 def create_project(destination: Path, *, display_name: str) -> list[Path]:
     """Create a self-contained starter project and return the written files.
@@ -40,6 +65,10 @@ def create_project(destination: Path, *, display_name: str) -> list[Path]:
             Then open <http://127.0.0.1:8000>.
             """
         ),
+        "AGENTS.md": AGENTS_GUIDE,
+        # Claude Code reads CLAUDE.md, most other agents AGENTS.md: one
+        # guide, imported rather than copied.
+        "CLAUDE.md": "@AGENTS.md\n",
         "pyproject.toml": dedent(
             f"""\
             [build-system]

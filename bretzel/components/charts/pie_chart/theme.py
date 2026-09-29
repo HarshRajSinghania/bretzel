@@ -58,5 +58,18 @@ PIE_CHART_THEME: dict[str, Any] = {
         "lg": {"h": 360, "label": 13, "center": 28},
         "xl": {"h": 440, "label": 14, "center": 34},
     },
-    "palette": ("primary", "success", "warning", "info", "error", "muted"),
+    # The auto-cycle when a series carries no ``color=``. BRAND colours
+    # first, then status colours, ``error`` last. The identity's author
+    # chose ``primary`` and ``secondary`` as a pair, so they are the two
+    # the framework can trust to differ; a status colour is only
+    # guaranteed to differ from the OTHER status colours
+    # (``test_palette_distinctness``), not from an arbitrary primary. The
+    # old cycle went primary → success, so under a green identity the
+    # first two series came out the same green. ``info`` next, the only
+    # status colour that says nothing; ``error`` last, since a series in
+    # red reads as an alarm.
+    "palette": (
+        "primary", "secondary", "info", "success", "warning", "error",
+        "muted",
+    ),
 }

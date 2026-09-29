@@ -175,8 +175,17 @@ class Input(Component):
         # affixes, so no icon shortcut for them.
         self._prefix = Component.adopt_slot(prefix)
         self._suffix = Component.adopt_slot(suffix)
-        self._icon_left = Component.adopt_slot(icon_left, icon_shortcut=True)
-        self._icon_right = Component.adopt_slot(icon_right, icon_shortcut=True)
+        # A shortcut icon (a name or a binding) is built at the step's
+        # ``icon_size`` — as Badge does; left to Icon's own ``md`` it
+        # overlapped the text of an ``xs`` field. A caller's Icon instance
+        # is left alone (explicit choice).
+        icon_size = self._size_map().get("icon_size", "md")
+        self._icon_left = Component.adopt_slot(
+            icon_left, icon_shortcut=True, icon_size=icon_size,
+        )
+        self._icon_right = Component.adopt_slot(
+            icon_right, icon_shortcut=True, icon_size=icon_size,
+        )
         # Design-time, so an instance attribute and not a
         # ``reactive_prop``: nothing on the client side switches a field
         # between clearable and not clearable.
@@ -213,11 +222,15 @@ class Input(Component):
 
     # ── Render ─────────────────────────────────────────────────────────
 
+    def _size_map(self) -> dict[str, str]:
+        """The theme's row for this field's step (``md`` by default)."""
+        size_key = self._reactive_values.get("size")
+        return self._resolved_theme().get("sizes", {}).get(
+            size_key if isinstance(size_key, str) else "md"
+        ) or {}
+
     def render(self) -> Element:
-        size_key = self._reactive_values.get("size") or "md"
-        size_map = (
-            self._resolved_theme().get("sizes", {}).get(size_key) or {}
-        )
+        size_map = self._size_map()
 
         has_affix = self._prefix is not None or self._suffix is not None
         has_icon = (
@@ -334,10 +347,12 @@ class Input(Component):
         # Icons → wrap in ``root`` with absolute-positioned overlays.
         children: list[Any] = []
         if self._icon_left is not None:
-            children.append(self._slot_element("icon_left", self._icon_left))
+            children.append(self._slot_element(
+                "icon_left", self._icon_left, size_map.get("icon_left", "")))
         children.append(input_el)
         if self._icon_right is not None:
-            children.append(self._slot_element("icon_right", self._icon_right))
+            children.append(self._slot_element(
+                "icon_right", self._icon_right, size_map.get("icon_right", "")))
         # AFTER the input: ``peer-*`` only looks at a PRECEDING sibling.
         if self._clearable:
             children.append(self._clear_button(size_map))
@@ -414,12 +429,11 @@ class Input(Component):
 
     # ── helpers ────────────────────────────────────────────────────────
 
-    def _slot_element(self, slot: str, content: Any) -> Element:
+    def _slot_element(self, slot: str, content: Any, sized: str = "") -> Element:
         """Build the ``<span>`` (or pre-rendered Component) for a
-        decorative slot."""
-        slot_class = self.compose_class(
-            slot, apply_variant_size_modifiers=False
-        )
+        decorative slot. ``sized``: the step's classes for that slot
+        (the icons' offset)."""
+        slot_class = self.slot_class(slot, sized)
         if isinstance(content, Component):
             # Component author : render as-is and stamp the slot class
             # on its root attrs.

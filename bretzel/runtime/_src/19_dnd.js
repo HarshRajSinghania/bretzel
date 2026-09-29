@@ -58,6 +58,7 @@
  *
  * DOM contract expected from Python (no new `bz-*` directive):
  *   zone : data-bz-dropzone="<name>"  data-bz-accepts="a,b"  [data-bz-locked]
+ *          [data-bz-terminal] (action target, never an in-flow destination)
  *          + a hidden carrier [data-bz-move-carrier] holding the hx-post
  *   item : data-bz-draggable  data-bz-key="…"  [data-bz-group] [data-bz-disabled]
  *          [data-bz-handle]  → when present, only [data-bz-drag-handle] grabs
@@ -460,24 +461,31 @@
   function hoverTo(x, y) {
     const under = document.elementFromPoint(x, y);
     if (!under) {
-      if (active.preview) active.preview.style.visibility = "";
+      active.terminalZone = null;
+      clearReplace();
       return;
     }
     const overZone = zoneOf(under);
     if (!overZone) {
-      if (active.preview) active.preview.style.visibility = "";
+      active.terminalZone = null;
+      clearReplace();
       return;
     }
-    //: A trash zone is a terminal action, not a destination to inspect.
-    //: The source card is still temporarily reparented there so `finish()`
-    //: can report the target, but showing its floating clone over the bin
-    //: makes it read as a second card.  Hide that clone while the pointer is
-    //: above any locked zone; reveal it immediately when it leaves again.
-    if (active.preview) {
-      active.preview.style.visibility = overZone.hasAttribute("data-bz-locked")
-        ? "hidden" : "";
+    if (!canEnter(overZone, active.group, active.originZone)) {
+      active.terminalZone = null;
+      clearReplace();
+      return;
     }
-    if (!canEnter(overZone, active.group, active.originZone)) return;
+
+    //: Archive/delete targets receive a Move, but never the real node.
+    //: Inserting into a clipped, fixed-height target made the card vanish
+    //: while its box still occupied space. Leave its layout untouched.
+    if (overZone.hasAttribute("data-bz-terminal")) {
+      clearReplace();
+      active.terminalZone = overZone;
+      return;
+    }
+    active.terminalZone = null;
 
     /* ⚠️ OVERWRITE. A zone that holds only one element and already
        carries one must receive NOTHING during the gesture: sliding the
@@ -627,8 +635,9 @@
     //: the mark, not from the position. Its index is 0 — a zone with one
     //: element has no other.
     const remplace = a.replaceZone;
-    const toZone = remplace || zoneOf(a.item);
-    const toIndex = remplace ? 0 : indexOf(a.item);
+    const terminal = a.terminalZone;
+    const toZone = terminal || remplace || zoneOf(a.item);
+    const toIndex = terminal || remplace ? 0 : indexOf(a.item);
     const origin = {parent: a.originParent, next: a.originNext, item: a.item};
     cleanup();
     if (!toZone) return;

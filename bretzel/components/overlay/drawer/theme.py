@@ -109,18 +109,20 @@ DRAWER_THEME: dict[str, Any] = {
     # Left/right sides clamp the actual width ; top/bottom sides clamp
     # the height. The component picks the right axis from ``side`` at
     # render time.
+    # In ``rem``, like ``lg`` and ``xl``: a spacing step follows the
+    # density, and ``sm``/``md`` rendered 25 % narrower than their names.
     "widths": {
         "horizontal": {  # left / right
-            "sm":   "w-72",
-            "md":   "w-96",
+            "sm":   "w-[18rem]",
+            "md":   "w-[24rem]",
             "lg":   "w-[28rem]",
             "xl":   "w-[36rem]",
             "full": "w-screen",
         },
         "vertical": {    # top / bottom
-            "sm":   "h-48",
-            "md":   "h-72",
-            "lg":   "h-96",
+            "sm":   "h-[12rem]",
+            "md":   "h-[18rem]",
+            "lg":   "h-[24rem]",
             "xl":   "h-[32rem]",
             "full": "h-screen",
         },

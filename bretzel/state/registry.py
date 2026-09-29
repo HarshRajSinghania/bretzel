@@ -611,8 +611,23 @@ class StateRegistry:
                         type(instance), set()).add(name)
                     changed = True
             if changed:
-                changed_classes.add(type(instance))
                 instance._bz_baseline = copy.deepcopy(current)
+            # A REFUSED submission is a change too, of what the form
+            # shows: its messages. Every value may be unchanged (all
+            # refused, or resubmitted as is), and the diff above then saw
+            # nothing — the action answered 204 and no error ever
+            # appeared. Not ``_dirty``: nothing to persist.
+            errors = instance.__dict__.get("_bz_errors")
+            if errors and errors != instance.__dict__.get("_bz_errors_shown"):
+                instance.__dict__["_bz_errors_shown"] = dict(errors)
+                for name in errors:
+                    if name in current:
+                        TRACKER.notify_change(instance, name)
+                self.changed_fields.setdefault(type(instance), set()).update(
+                    name for name in errors if name in current)
+                changed = True
+            if changed:
+                changed_classes.add(type(instance))
         return changed_classes
 
     # ── Addressable state ───────────────────────────────────────────────

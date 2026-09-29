@@ -44,7 +44,7 @@ def _hx_name(raw: str) -> str | None:
 
 def check(module: Module) -> list[Finding]:
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         if not isinstance(node, ast.Call):
             continue
         for keyword in node.keywords:

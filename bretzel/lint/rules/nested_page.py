@@ -75,6 +75,8 @@ RULE = "page-declared-in-a-function"
 _MARKS = frozenset({"page", "error_page"})
 
 _Func = ast.FunctionDef | ast.AsyncFunctionDef
+#: The same, as a tuple: an inline ``A | B`` is rebuilt for every node.
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 def _decorator_name(node: ast.expr) -> str | None:
@@ -103,7 +105,7 @@ def _nested_functions(tree: ast.AST) -> list[tuple[_Func, _Func]]:
 
     def descend(node: ast.AST, enclosing: _Func | None) -> None:
         for child in ast.iter_child_nodes(node):
-            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+            if isinstance(child, _FUNCTIONS):
                 if enclosing is not None:
                     couples.append((child, enclosing))
                 descend(child, child)
@@ -133,6 +135,14 @@ def _is_referenced(name: str, scope: _Func) -> bool:
 
 def check(module: Module) -> list[Finding]:
     """The marked pages no sweep can reach."""
+    # Only a marked function outside the module's body can be nested: the
+    # descent below visits every node again, so it runs only then.
+    top = {id(stmt) for stmt in module.tree.body}
+    if not any(
+        isinstance(node, _FUNCTIONS) and id(node) not in top and _is_marked(node)
+        for node in module.nodes
+    ):
+        return []
     findings: list[Finding] = []
     for func, enclosing in _nested_functions(module.tree):
         if not _is_marked(func) or _is_referenced(func.name, enclosing):

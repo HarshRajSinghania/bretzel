@@ -56,9 +56,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import bretzel.runtime as _runtime
-
 from bretzel.introspect import CATEGORY_UNCLASSIFIED
-from examples.docs.lib.i18n import tr
 
 _RUNTIME_DIR = Path(_runtime.__file__).resolve().parent
 _SRC = _RUNTIME_DIR / "_src"
@@ -132,131 +130,92 @@ def by_category(ops: list, order: dict[str, int]) -> tuple:
 _DIRECTIVE_DISPLAY: dict[str, tuple[str, str, str]] = {
     # name → (category, syntax, what it guarantees)
     "bz-data": (
-        tr('DOM structure',
-           'structure du DOM'),
+        'DOM structure',
         'bz-data="{ open: false }"',
-        tr('Opens a local scope, keyed by bz-id — it SURVIVES the morph of a '
-           'server refresh. Inside a scope method, write this.field.',
-           "Ouvre un scope local, keyé par bz-id — il SURVIT au morph d'un "
-           'refresh serveur. Dans une méthode du scope, écrire this.champ.'),
+        'Opens a local scope, keyed by bz-id — it SURVIVES the morph of a '
+        'server refresh. Inside a scope method, write this.field.',
     ),
     "bz-if": (
-        tr('DOM structure',
-           'structure du DOM'),
+        'DOM structure',
         'bz-if="expr"',
-        tr('Really mounts / unmounts the subtree. Every mount starts from a '
-           'fresh tree.',
-           'Monte / démonte réellement le sous-arbre. Chaque montage repart '
-           "d'un arbre frais."),
+        'Really mounts / unmounts the subtree. Every mount starts from a '
+        'fresh tree.',
     ),
     "bz-for": (
-        tr('DOM structure',
-           'structure du DOM'),
+        'DOM structure',
         'bz-for="v in liste :key=v.id :flip"',
-        tr('Keyed iteration over a single-root <template>. :key reuses the '
-           'nodes; :flip animates the reflow of the rows that survive.',
-           'Itération keyée sur un <template> à racine unique. :key réutilise'
-           ' les nœuds ; :flip anime le reflow des lignes qui survivent.'),
+        'Keyed iteration over a single-root <template>. :key reuses the '
+        'nodes; :flip animates the reflow of the rows that survive.',
     ),
     "bz-teleport": (
-        tr('DOM structure',
-           'structure du DOM'),
+        'DOM structure',
         'bz-teleport="body"',
-        tr('Projects the content elsewhere in the DOM; the scope stays '
-           'resolved at the original place. Re-projects if the source '
-           'changed.',
-           'Projette le contenu ailleurs dans le DOM ; le scope reste résolu '
-           "à l'endroit d'origine. Re-projette si la source a changé."),
+        'Projects the content elsewhere in the DOM; the scope stays '
+        'resolved at the original place. Re-projects if the source '
+        'changed.',
     ),
     "bz-text": (
-        tr('reactive display',
-           'affichage réactif'),
+        'reactive display',
         'bz-text="expr"',
-        tr('textContent follows the value. Display only.',
-           'textContent suit la valeur. Affichage seul.'),
+        'textContent follows the value. Display only.',
     ),
     "bz-show": (
-        tr('reactive display',
-           'affichage réactif'),
+        'reactive display',
         'bz-show="expr"',
-        tr('Toggles display. The element stays mounted (hence stays in the '
-           'DOM for focus, measurement, tests).',
-           "Bascule display. L'élément reste monté (et reste donc dans le DOM"
-           ' pour le focus, la mesure, les tests).'),
+        'Toggles display. The element stays mounted (hence stays in the '
+        'DOM for focus, measurement, tests).',
     ),
     "bz-class": (
-        tr('reactive display',
-           'affichage réactif'),
+        'reactive display',
         'bz-class="{ actif: open }"',
-        tr('Adds / removes classes by truthiness. The static class= rendered '
-           'by the server is a baseline that is never removable.',
-           'Ajoute / retire des classes par truthiness. Le class= statique '
-           'rendu par le serveur est une baseline jamais retirable.'),
+        'Adds / removes classes by truthiness. The static class= rendered '
+        'by the server is a baseline that is never removable.',
     ),
     "bz-attr:": (
-        tr('reactive display',
-           'affichage réactif'),
+        'reactive display',
         'bz-attr:aria-expanded="open"',
-        tr('A one-way reactive attribute. false/null/undefined remove the '
-           'attribute; on a native form field, the property is updated too '
-           '(otherwise a morph would empty the input).',
-           'Attribut réactif une-voie. false/null/undefined retirent '
-           "l'attribut ; sur un champ de formulaire natif, la propriété est "
-           'mise à jour aussi (sinon un morph viderait la saisie).'),
+        'A one-way reactive attribute. false/null/undefined remove the '
+        'attribute; on a native form field, the property is updated too '
+        '(otherwise a morph would empty the input).',
     ),
     "bz-model": (
-        "saisie deux-voies",
+        "two-way input",
         'bz-model="$bz.state.Form.default.email"',
-        tr('Two-way binding, form controls only.',
-           'Liaison deux-voies, contrôles de formulaire uniquement.'),
+        'Two-way binding, form controls only.',
     ),
     "bz-on:": (
-        "geste utilisateur",
+        "user gesture",
         'bz-on:click="open = !open"',
-        tr('Listens for an event. An element marked aria-disabled STARTS no '
-           'interaction: activation events are ignored, the others pass '
-           '(closing stays possible).',
-           'Écoute un événement. Un élément marqué aria-disabled ne DÉMARRE '
-           "aucune interaction : les événements d'activation sont ignorés, "
-           'les autres passent (fermer reste possible).'),
+        'Listens for an event. An element marked aria-disabled STARTS no '
+        'interaction: activation events are ignored, the others pass '
+        '(closing stays possible).',
     ),
     "bz-init": (
-        tr("the node's lifecycle",
-           'cycle de vie du nœud'),
+        "the node's lifecycle",
         'bz-init="setup()"',
-        tr("Once only, at the node's first mount — and not replayed by a re-"
-           'bind after a morph.',
-           'Une seule fois, au premier montage du nœud — et pas rejoué par un'
-           ' re-bind après morph.'),
+        "Once only, at the node's first mount — and not replayed by a re-"
+        'bind after a morph.',
     ),
     "bz-effect": (
-        tr("the node's lifecycle",
-           'cycle de vie du nœud'),
+        "the node's lifecycle",
         'bz-effect="void geom"',
-        tr('A continuous reactive effect: replayed on every mutation of a '
-           'signal it reads.',
-           "Effet réactif continu : re-joué à chaque mutation d'un signal lu."),
+        'A continuous reactive effect: replayed on every mutation of a '
+        'signal it reads.',
     ),
     "bz-ref": (
-        tr("the node's lifecycle",
-           'cycle de vie du nœud'),
+        "the node's lifecycle",
         'bz-ref="track"',
-        tr('Names the node in $refs. Registered across the whole tree BEFORE '
-           'any binding, so a parent bz-init sees a child ref.',
-           "Nomme le nœud dans $refs. Enregistré sur tout l'arbre AVANT le "
-           "moindre binding, pour qu'un bz-init parent voie un ref enfant."),
+        'Names the node in $refs. Registered across the whole tree BEFORE '
+        'any binding, so a parent bz-init sees a child ref.',
     ),
 }
 
 _DIRECTIVE_ORDER = {
-    tr('DOM structure',
-       'structure du DOM'): 0,
-    tr('reactive display',
-       'affichage réactif'): 1,
-    "saisie deux-voies": 2,
-    "geste utilisateur": 3,
-    tr("the node's lifecycle",
-       'cycle de vie du nœud'): 4,
+    'DOM structure': 0,
+    'reactive display': 1,
+    "two-way input": 2,
+    "user gesture": 3,
+    "the node's lifecycle": 4,
 }
 
 
@@ -351,38 +310,19 @@ def binding_order() -> tuple[str, ...]:
 # ── 2. Magics d'expression ─────────────────────────────────────────────
 
 _MAGIC_DISPLAY: dict[str, tuple[str, str]] = {
-    "$scope": (tr('scope',
-                  'portée'), tr('The current bz-data scope. It is on the scope '
-                            'chain too, so a bare name reads it.',
-                            'Le scope bz-data courant. Il est aussi sur la '
-                            'chaîne de portée, donc un nom nu le lit.')),
-    "$el": (tr('the node',
-               'le nœud'), tr('The element carrying the directive.',
-                          "L'élément qui porte la directive.")),
-    "$refs": (tr('the node',
-                 'le nœud'), tr('The nodes named by bz-ref in this scope.',
-                            'Les nœuds nommés par bz-ref dans ce scope.')),
-    "$event": (tr('the event',
-                  "l'événement"), tr('The DOM event — inside a bz-on: only.',
-                                 "L'événement DOM — dans un bz-on: seulement.")),
-    "$value": (tr('the event',
-                  "l'événement"), tr('The value written — inside a bz-model only.',
-                                 'La valeur écrite — dans un bz-model '
-                                 'seulement.')),
-    "$dispatch": ("agir", tr('$dispatch(name, detail) — a CustomEvent '
-                             'bubbling up from $el.',
-                             '$dispatch(nom, detail) — un CustomEvent qui '
-                             'remonte depuis $el.')),
-    "$nextTick": ("agir", tr('$nextTick(fn) — after the signal flush, hence '
-                             'after the DOM has been rewritten.',
-                             '$nextTick(fn) — après le flush des signaux, '
-                             'donc après que le DOM ait été réécrit.')),
+    "$scope": ('scope', 'The current bz-data scope. It is on the scope '
+                         'chain too, so a bare name reads it.'),
+    "$el": ('the node', 'The element carrying the directive.'),
+    "$refs": ('the node', 'The nodes named by bz-ref in this scope.'),
+    "$event": ('the event', 'The DOM event — inside a bz-on: only.'),
+    "$value": ('the event', 'The value written — inside a bz-model only.'),
+    "$dispatch": ("act", '$dispatch(name, detail) — a CustomEvent '
+                          'bubbling up from $el.'),
+    "$nextTick": ("act", '$nextTick(fn) — after the signal flush, hence '
+                          'after the DOM has been rewritten.'),
 }
 
-_MAGIC_ORDER = {tr('scope',
-                   'portée'): 0, tr('the node',
-                                'le nœud'): 1, tr('the event',
-                                              "l'événement"): 2, "agir": 3}
+_MAGIC_ORDER = {'scope': 0, 'the node': 1, 'the event': 2, "act": 3}
 
 _NEW_FUNCTION = re.compile(r"new Function\((?P<args>[^)]*)\)")
 
@@ -418,112 +358,63 @@ def describe_magics() -> tuple[MagicOp, ...]:
 # ── 3. Surface $bz ─────────────────────────────────────────────────────
 
 _API_DISPLAY: dict[str, tuple[str, str]] = {
-    "signal": (tr('reactivity',
-                  'réactivité'),
-               tr('signal(init) → {get, set, peek, subscribe}. get() '
-                  'subscribes the current effect, peek() reads without '
-                  'subscribing, set() triggers nothing if the value is '
-                  'identical.',
-                  'signal(init) → {get, set, peek, subscribe}. get() abonne '
-                  "l'effet courant, peek() lit sans abonner, set() ne "
-                  'déclenche rien si la valeur est identique.')),
-    "effect": (tr('reactivity',
-                  'réactivité'),
-               tr('effect(fn) → {dispose}. Runs straight away, runs again '
-                  'when a signal it read changes. The writes of a single tick'
-                  ' are merged into one re-execution.',
-                  'effect(fn) → {dispose}. Tourne tout de suite, re-tourne '
-                  "quand un signal lu change. Les écritures d'un même tick "
-                  'sont fusionnées en une seule re-exécution.')),
-    "computed": (tr('reactivity',
-                    'réactivité'),
-                 tr('computed(fn) → {get, peek, dispose}. A memoised '
-                    'derivation, recomputed when a dependency moves.',
-                    'computed(fn) → {get, peek, dispose}. Dérivation '
-                    'mémoïsée, recalculée quand une dépendance bouge.')),
-    "state": (tr('state & transport',
-                 'état & transport'),
-              tr('$bz.state.<Class>.<key>.<field> — the signal of a client-'
-                 'state field, materialised at boot from the envelope.',
-                 "$bz.state.<Classe>.<clé>.<champ> — le signal d'un champ "
-                 "d'état client, matérialisé au boot depuis l'enveloppe.")),
-    "notify": (tr('state & transport',
-                  'état & transport'),
-               tr('Pushes a toast onto the notification stack.',
-                  'Pousse un toast dans la pile de notifications.')),
-    "pending": (tr('state & transport',
-                   'état & transport'),
-                tr('pending(element|action_id, delay_ms) → the “an action is '
-                   'in flight” signal. An element walks up to the carrier of '
-                   'its hx-post; a string addresses the action from elsewhere'
-                   ' in the page. The delay is what avoids the flash on short'
-                   ' round trips. On the Python side: ``ui.pending()``.',
-                   'pending(élément|action_id, délai_ms) → le signal « une '
-                   'action est en vol ». Un élément remonte au porteur de son'
-                   " hx-post ; une chaîne adresse l'action depuis ailleurs "
-                   'dans la page. Le délai est ce qui évite le flash sur les '
-                   'allers-retours courts. Côté Python : ``ui.pending()``.')),
-    "version": (tr('state & transport',
-                   'état & transport'),
-                tr("The bundle's protocol version.",
-                   'La version de protocole du bundle.')),
-    "helpers": (tr('shared helpers',
-                   'helpers partagés'),
-                tr('The bricks shared by the overlays and by the pointer-drag'
-                   ' family.',
-                   'Les briques partagées des overlays et de la famille '
-                   'pointer-drag.')),
-    "num": (tr('shared helpers',
-               'helpers partagés'),
-            tr('Pure numeric primitives: precision implied by a step.',
-               'Primitives numériques pures : précision impliquée par un pas.')),
-    "multiSelect": (tr('shared helpers',
-                       'helpers partagés'),
-                    tr('The membership algebra of a multiple selection, '
-                       'shared by Select and Combobox.',
-                       "L'algèbre d'appartenance d'une sélection multiple, "
-                       'partagée par Select et Combobox.')),
-    "dnd": ("moteur de geste",
-            tr('The Pointer Events drag-and-drop engine, shared by draggable '
-               'and dropzone.',
-               'Le moteur de glisser-déposer en Pointer Events, partagé par '
-               'draggable et dropzone.')),
-    "verbs": (tr('shared helpers',
-                 'helpers partagés'),
-              tr('The client half of the VERBS (``bretzel.copy`` …): a '
-                 'browser action triggered from an ``on_*=``. Only ``copy`` '
-                 'lives there — ``print`` and ``fullscreen`` fit in an '
-                 'expression Python writes out in full. It carries the '
-                 'fallback outside a secure context, without which an '
-                 'internal tool served over ``http://`` on a local IP would '
-                 'copy nothing, in silence.',
-                 'La moitié cliente des VERBES (``bretzel.copy`` …) : une '
-                 'action du navigateur déclenchée depuis un ``on_*=``. Seule '
-                 '``copy`` y vit — ``print`` et ``fullscreen`` tiennent en '
-                 'une expression que Python écrit en toutes lettres. Elle '
-                 'porte le repli hors contexte sécurisé, sans lequel un outil'
-                 ' interne servi en ``http://`` sur une IP locale ne '
-                 'copierait rien, en silence.')),
-    "locale": (tr('shared helpers',
-                  'helpers partagés'),
-               tr('The month and day names, derived from ``<html lang>`` by '
-                  '``Intl``. Python cannot produce them: its ``locale`` '
-                  'module is process-global state.',
-                  'Les noms de mois et de jours, dérivés de ``<html lang>`` '
-                  'par ``Intl``. Python ne peut pas les produire : son module'
-                  ' ``locale`` est un état global au processus.')),
+    "signal": ('reactivity',
+               'signal(init) → {get, set, peek, subscribe}. get() '
+               'subscribes the current effect, peek() reads without '
+               'subscribing, set() triggers nothing if the value is '
+               'identical.'),
+    "effect": ('reactivity',
+               'effect(fn) → {dispose}. Runs straight away, runs again '
+               'when a signal it read changes. The writes of a single tick'
+               ' are merged into one re-execution.'),
+    "computed": ('reactivity',
+                 'computed(fn) → {get, peek, dispose}. A memoised '
+                 'derivation, recomputed when a dependency moves.'),
+    "state": ('state & transport',
+              '$bz.state.<Class>.<key>.<field> — the signal of a client-'
+              'state field, materialised at boot from the envelope.'),
+    "notify": ('state & transport',
+               'Pushes a toast onto the notification stack.'),
+    "pending": ('state & transport',
+                'pending(element|action_id, delay_ms) → the “an action is '
+                'in flight” signal. An element walks up to the carrier of '
+                'its hx-post; a string addresses the action from elsewhere'
+                ' in the page. The delay is what avoids the flash on short'
+                ' round trips. On the Python side: ``ui.pending()``.'),
+    "version": ('state & transport',
+                "The bundle's protocol version."),
+    "helpers": ('shared helpers',
+                'The bricks shared by the overlays and by the pointer-drag'
+                ' family.'),
+    "num": ('shared helpers',
+            'Pure numeric primitives: precision implied by a step.'),
+    "multiSelect": ('shared helpers',
+                    'The membership algebra of a multiple selection, '
+                    'shared by Select and Combobox.'),
+    "dnd": ("gesture engine",
+            'The Pointer Events drag-and-drop engine, shared by draggable '
+            'and dropzone.'),
+    "verbs": ('shared helpers',
+              'The client half of the VERBS (``bretzel.copy`` …): a '
+              'browser action triggered from an ``on_*=``. Only ``copy`` '
+              'lives there — ``print`` and ``fullscreen`` fit in an '
+              'expression Python writes out in full. It carries the '
+              'fallback outside a secure context, without which an '
+              'internal tool served over ``http://`` on a local IP would '
+              'copy nothing, in silence.'),
+    "locale": ('shared helpers',
+               'The month and day names, derived from ``<html lang>`` by '
+               '``Intl``. Python cannot produce them: its ``locale`` '
+               'module is process-global state.'),
 }
 
 _API_ORDER = {
-    tr('reactivity',
-       'réactivité'): 0,
-    tr('state & transport',
-       'état & transport'): 1,
-    tr('shared helpers',
-       'helpers partagés'): 2,
-    "moteur de geste": 3,
-    "scope de composant": 4,
-    "interne": 5,
+    'reactivity': 0,
+    'state & transport': 1,
+    'shared helpers': 2,
+    "gesture engine": 3,
+    "component scope": 4,
+    "internal": 5,
 }
 
 #: The keys that signal a "component scope factory" object. The
@@ -609,15 +500,13 @@ def describe_runtime_api() -> tuple[RuntimeApiOp, ...]:
             body = source.code[match.end():end]
             members = top_level_keys(body)
             if name.startswith("_"):
-                category, doc = "interne", ""
+                category, doc = "internal", ""
             elif name in _API_DISPLAY:
                 category, doc = _API_DISPLAY[name]
             elif _SCOPE_KEYS.search(body):
-                category = "scope de composant"
-                doc = tr("A scope factory, spread into the component's bz-"
-                         'data.',
-                         'Fabrique de scope, spreadée dans le bz-data du '
-                         'composant.')
+                category = "component scope"
+                doc = ("A scope factory, spread into the component's bz-"
+                      'data.')
             else:
                 category, doc = CATEGORY_UNCLASSIFIED, ""
             ops.append(RuntimeApiOp(
@@ -656,8 +545,8 @@ def describe_runtime_modules() -> tuple[RuntimeModuleOp, ...]:
         title = header.group("title").rstrip("*/ ").strip() if header else ""
         ops.append(RuntimeModuleOp(
             name=source.name,
-            category=("socle" if int(source.name[:2]) <= _CORE_MAX
-                      else "moteur de composant"),
+            category=("core" if int(source.name[:2]) <= _CORE_MAX
+                      else "component engine"),
             title=title,
             lines=len(source.raw.splitlines()),
         ))
@@ -669,7 +558,7 @@ def bundle_facts() -> dict[str, int]:
     """The bundle's figures, measured — not announced. (The size budget
     the build's docstring promised was wrong by a factor of 2 before it
     was removed; so we show what we measure.)"""
-    core = [m for m in describe_runtime_modules() if m.category == "socle"]
+    core = [m for m in describe_runtime_modules() if m.category == "core"]
     return {
         "modules": len(describe_runtime_modules()),
         "core_modules": len(core),

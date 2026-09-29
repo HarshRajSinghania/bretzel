@@ -78,7 +78,7 @@ from bretzel.components.base import (
 from bretzel.components.base._wiring import (
     activate_keydown,
     hidden_carrier_attrs,
-    server_sync_marker,
+    scope_literal,
 )
 from bretzel.components.base.events import (
     client_event_attr,
@@ -708,40 +708,20 @@ class Diagram(Component):
     def _selection_wiring(
         self, slots: dict
     ) -> tuple[dict[str, Any], Element | None]:
-        """The root's attributes, and the hidden input if one is needed.
-
-        ⚠️ This scope literal joins the base layer's debt no. 1 (14 → 15
-        files, `test_scope_literal_debt_only_shrinks`), and it is a
-        DECISION, not an oversight. A ⇄ two-way prop requires the "local
-        value → store cell" switch; the 13 components that have both a
-        runtime slab and a selection all carry it. The price of avoiding
-        it would be to re-inline the five methods of `$bz.diagram.scope`
-        into EVERY node.
-        """
+        """The root's attributes, and the hidden input if one is needed."""
         binding = self._binding_metadata.get("value")
         initial = str(self._reactive_values.get("value") or "")
         (scope_key,) = self._scope_keys("value")
-        if binding is not None:
-            # Bound: the store cell IS the truth, we do not duplicate
-            # it locally (that would race the framework's application of
-            # the delta).
-            path = self.path_of(binding)
-            scope = (
-                "{...$bz.diagram.scope,"
-                f"_read(){{return {path};}},"
-                f"_write(v){{{path} = v;}}}}"
-            )
-        else:
-            sync = server_sync_marker(
-                *self._scope_keys("value"),
-                enabled=self._value_server_backed("value"),
-            )
-            scope = (
-                "{...$bz.diagram.scope,"
-                f"{scope_key}: {json.dumps(initial)}"
-                + (f",{sync}" if sync else "")
-                + "}"
-            )
+        # Bound: the store cell IS the truth, it is not duplicated
+        # locally (that would race the framework's application of the
+        # delta).
+        scope = scope_literal(
+            "$bz.diagram.scope",
+            cell=scope_key,
+            initial=json.dumps(initial),
+            binding_path=self.path_of(binding) if binding is not None else None,
+            server_synced=self._value_server_backed("value"),
+        )
 
         # ── The hidden input — form / server-action integration ─────
         # A `<div>` carries neither `name`/`value` nor a native `change`:

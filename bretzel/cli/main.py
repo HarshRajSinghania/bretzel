@@ -11,8 +11,8 @@ Each command answers a concrete question:
   merging with an existing folder.
 - ``bretzel dev`` — imports an app and restarts it on every change.
 
-- ``bretzel describe`` — the index of the whole surface, or one symbol's
-  card: a component, a module, or any public name (``page``,
+- ``bretzel describe`` — the index of the whole surface, or the cards of
+  the names given: components, modules, or any public name (``page``,
   ``PageState``, ``ClientBinding``, ``ROUTE_ACTION``). Text output by
   default, ``--json`` for a consumer.
 - ``bretzel check`` — runs the rules over application code. Exit code 1
@@ -61,12 +61,15 @@ def _dev(args: argparse.Namespace) -> int:
 
 
 def _describe(args: argparse.Namespace) -> int:
+    """Each name's card, in order, from one call. An unknown name does not
+    hide the others: its error goes to stderr and the exit code is 2."""
     from bretzel.introspect import describe, index
 
+    names = args.symbols
     if args.theme:
         # Before anything else: `--theme` answers a DIFFERENT question
         # from the card, and without a name it has nobody to ask.
-        if args.symbol is None:
+        if not names:
             print(
                 "`--theme` requires a component: `describe button --theme`.",
                 file=sys.stderr,
@@ -74,14 +77,8 @@ def _describe(args: argparse.Namespace) -> int:
             return 2
         from bretzel.introspect import theme_sheet
 
-        try:
-            print(theme_sheet(args.symbol))
-        except KeyError as exc:
-            print(str(exc).strip("\"'"), file=sys.stderr)
-            return 2
-        return 0
-
-    if args.symbol is None:
+        render = theme_sheet
+    elif not names:
         if args.json:
             from bretzel.introspect import SCHEMA_VERSION, describe_components
 
@@ -93,16 +90,22 @@ def _describe(args: argparse.Namespace) -> int:
         else:
             print(index())
         return 0
+    else:
+        render = _as_dict if args.json else describe
 
-    try:
-        if args.json:
-            print(json.dumps(_as_dict(args.symbol), ensure_ascii=False, indent=2))
-        else:
-            print(describe(args.symbol))
-    except (KeyError, AttributeError) as exc:
-        print(str(exc).strip("\"'"), file=sys.stderr)
-        return 2
-    return 0
+    found: list = []
+    for name in names:
+        try:
+            found.append(render(name))
+        except (KeyError, AttributeError) as exc:
+            print(str(exc).strip("\"'"), file=sys.stderr)
+    if found and args.json and not args.theme:
+        # One name keeps its object; several give the list of them.
+        shown = found[0] if len(names) == 1 else found
+        print(json.dumps(shown, ensure_ascii=False, indent=2))
+    elif found:
+        print("\n\n".join(found))
+    return 0 if len(found) == len(names) else 2
 
 
 def _as_dict(name: str) -> dict:
@@ -263,16 +266,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="show the public API or describe a symbol",
         description=(
             "Without an argument, show a compact one-line-per-symbol index. "
-            "With a name, show the complete symbol description."
+            "With names, show each symbol's complete description — ask for "
+            "every card you need in one call."
         ),
     )
     desc.add_argument(
-        "symbol",
-        nargs="?",
+        "symbols",
+        nargs="*",
+        metavar="NAME",
         help="a component (`button`), symbol (`page`, `PageState`, "
         "`ROUTE_ACTION`), or module (`bretzel.state`)",
     )
-    desc.add_argument("--json", action="store_true", help="machine-readable output")
+    desc.add_argument(
+        "--json",
+        action="store_true",
+        help="machine-readable output (several names: a list of cards)",
+    )
     desc.add_argument(
         "--theme",
         action="store_true",

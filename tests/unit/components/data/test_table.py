@@ -134,8 +134,8 @@ class TestColumnFeatures:
                 rows=[{"n": 7}],
             )
             out = serialize(t.render())
-        # ``text-right`` should appear at least twice (th + td).
-        assert out.count("text-right") >= 2
+        # ``text-end`` should appear at least twice (th + td).
+        assert out.count("text-end") >= 2
 
     def test_width_via_col_tag(self) -> None:
         with render_isolated():

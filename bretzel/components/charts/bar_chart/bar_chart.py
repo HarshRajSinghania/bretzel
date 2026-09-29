@@ -36,12 +36,18 @@ from bretzel.components.base import (
 )
 from bretzel.components.base._wiring import theme_context
 from bretzel.components.charts._layers import (
+    PLOT_MARGIN_RIGHT,
+    apply_fixed_width,
+    plot_svg,
     reject_empty_text_component,
     render_axis_layer,
     render_empty_state,
 )
 from bretzel.components.charts._svg import (
+    PLOT_SPAN,
     _fmt,
+    _pct,
+    axis_margin,
     compute_ticks,
     format_value,
     linear_scale,
@@ -49,6 +55,8 @@ from bretzel.components.charts._svg import (
 from bretzel.components.charts.bar_chart.theme import BAR_CHART_THEME
 from bretzel.components.charts.line_chart.line_chart import (
     _coerce_references,
+    _reference_text,
+    _render_reference_labels,
     _render_reference_lines,
 )
 from bretzel.components.charts.series import Series, coloured_slot
@@ -57,15 +65,22 @@ from bretzel.core.tree import TextNode as TextNode
 from bretzel.render import text
 from bretzel.render.context import current_context
 
-# Layout constants — picked to balance density and legibility at the
-# default 600 × 280 intrinsic size. The plot rectangle is what's left
-# after carving out the four margins.
+# Layout constants. The plot rectangle is what's left after carving out
+# the margins; horizontally it is the ``<svg>`` itself, and every x in
+# it is a percentage (``_svg.PLOT_SPAN``). The two left margins are
+# FLOORS: ``axis_margin`` widens them to the widest label. The right one
+# is ``_layers.PLOT_MARGIN_RIGHT``.
 _MARGIN_LEFT_AXIS = 48     # room for Y-tick text (vertical orientation)
 _MARGIN_LEFT_HORIZONTAL = 92  # room for category labels (horizontal orientation)
 _MARGIN_LEFT_NO_AXIS = 8
-_MARGIN_RIGHT = 12
 _MARGIN_TOP = 16
 _MARGIN_BOTTOM = 32        # room for X-axis labels
+
+#: The width assumed where a PIXEL decision must be taken server-side
+#: and the chart fills a container the server cannot measure — only
+#: whether a ``stacked_100`` horizontal segment is wide enough for its
+#: label. It is the chart's former intrinsic width.
+_NOMINAL_WIDTH = 600
 
 
 class BarChart(Component):
@@ -94,7 +109,9 @@ class BarChart(Component):
     # component level ; per-bar clicks register through render().
     color: str = reactive_prop(default="primary", emit_attr=False)
     size: str = reactive_prop(default="md", emit_attr=False)
-    width: int = reactive_prop(default=600, emit_attr=False)
+    # ``None`` = fill the container; ``N`` = N pixels, capped at the
+    # container. Cf. ``_layers.plot_svg``.
+    width: int | None = reactive_prop(default=None, emit_attr=False)
     # ``grouped`` (default) = sub-bars side-by-side per category ;
     # ``stacked`` = segments along the value axis (column total reads as
     # a whole) ; ``stacked_100`` = each stack normalised to 100 % for
@@ -166,7 +183,7 @@ class BarChart(Component):
         theme, _slots, sizes, size_name, color = theme_context(self)
         palette = theme.get("palette", ("primary",))
 
-        width = int(self._reactive_values.get("width") or 600)
+        width = self._reactive_values.get("width")
         variant = self._reactive_values.get("variant") or "grouped"
         orientation = self._reactive_values.get("orientation") or "vertical"
         show_values = bool(self._reactive_values.get("show_values"))
@@ -199,13 +216,14 @@ class BarChart(Component):
 
         wrapper_attrs = self.emit_attrs()
         wrapper_attrs["class"] = slot("wrapper")
+        apply_fixed_width(wrapper_attrs, width)
         wrapper_attrs.setdefault("bz-data", "$bz.charts.tooltipScope()")
 
         if not labels:
             return Element(
                 tag=self._tag, attrs=wrapper_attrs,
                 children=(render_empty_state(
-                    self, width=width, height=height,
+                    self, width=width or 0, height=height,
                     kind=text("chart.bar"),
                     message=empty_text, icon=self._empty_icon,
                     description=self._empty_description,
@@ -237,22 +255,28 @@ class BarChart(Component):
         vmin = ticks[0] if ticks else raw_min
         vmax = ticks[-1] if ticks else raw_max
 
-        # Horizontal mode needs a wider left margin to fit category
-        # labels (which can be multi-word strings ; numeric ticks fit
-        # in 48 px but "Customer Acquisition" needs more).
-        if horizontal:
-            margin_left = (
-                _MARGIN_LEFT_HORIZONTAL if show_axis
-                else _MARGIN_LEFT_NO_AXIS
+        # The labels left of the plot are the category names in
+        # horizontal mode, the value ticks otherwise; the margin holds
+        # the widest of them (a long ``y_unit`` was cut off at 48 px).
+        if not show_axis:
+            margin_left = _MARGIN_LEFT_NO_AXIS
+        elif horizontal:
+            margin_left = axis_margin(
+                labels, axis_font, floor=_MARGIN_LEFT_HORIZONTAL,
             )
         else:
-            margin_left = (
-                _MARGIN_LEFT_AXIS if show_axis else _MARGIN_LEFT_NO_AXIS
+            margin_left = axis_margin(
+                (format_value(t, self._y_format, self._y_unit) for t in ticks),
+                axis_font, floor=_MARGIN_LEFT_AXIS,
             )
-        plot_left = margin_left
-        plot_right = width - _MARGIN_RIGHT
+        # Percent space horizontally — cf. ``_svg.PLOT_SPAN``.
+        plot_left = 0.0
+        plot_right = PLOT_SPAN
         plot_top = _MARGIN_TOP
         plot_bottom = height - _MARGIN_BOTTOM
+        # Only for the pixel decisions (``_fits_label``): the plot's
+        # width as far as the server can know it.
+        plot_px = (width or _NOMINAL_WIDTH) - margin_left - PLOT_MARGIN_RIGHT
 
         # The ``value_scale`` always maps the numeric domain (vmin →
         # vmax) to the value axis ; the axis itself is X in horizontal
@@ -275,34 +299,31 @@ class BarChart(Component):
                 ))
             else:
                 children.append(_render_axis_layer(
-                    slot, ticks, value_scale, plot_left, plot_right,
+                    slot, ticks, value_scale,
                     axis_font, show_axis, show_gridlines,
                     self._y_format, self._y_unit,
                 ))
 
-        # Reference lines paint BEFORE the bars so the bars cover
-        # them ; the line orientation mirrors the chart's : horizontal
-        # ``<line>`` in vertical mode, vertical ``<line>`` in
-        # horizontal mode.
+        # Reference LINES paint BEFORE the bars so the bars cover them;
+        # their LABELS after (below). The line orientation mirrors the
+        # chart's: horizontal ``<line>`` in vertical mode, vertical
+        # ``<line>`` in horizontal mode.
         if self._reference_lines:
             if horizontal:
                 children.append(_render_reference_lines_horizontal(
                     slot, self._reference_lines, value_scale,
-                    plot_top, plot_bottom, axis_font,
-                    self._y_format, self._y_unit,
+                    plot_top, plot_bottom,
                 ))
             else:
                 children.append(_render_reference_lines(
                     slot, self._reference_lines, value_scale,
-                    plot_left, plot_right, axis_font,
-                    self._y_format, self._y_unit,
                 ))
 
         # Pick the bars renderer based on orientation × variant matrix.
         if horizontal:
             if stacked_100:
                 children.append(_render_stacked_100_bars_horizontal(
-                    slot, series, plot_left, plot_top, plot_bottom,
+                    slot, series, plot_px, plot_top, plot_bottom,
                     value_scale, bar_pad, value_font, show_values,
                     self._y_format, self._y_unit,
                     on_item_click=self._on_item_click, component_id=self.id,
@@ -353,26 +374,35 @@ class BarChart(Component):
                     modifier=self._trigger_modifier,
                 ))
 
+        # The reference LABELS, over the bars: painted under them, a
+        # label behind a taller bar could not be read.
+        if self._reference_lines:
+            if horizontal:
+                children.append(_render_reference_labels_horizontal(
+                    slot, self._reference_lines, value_scale,
+                    plot_top, axis_font, self._y_format, self._y_unit,
+                ))
+            else:
+                children.append(_render_reference_labels(
+                    slot, self._reference_lines, value_scale, axis_font,
+                    self._y_format, self._y_unit,
+                ))
+
         # Category labels — at the bottom (X axis) in vertical mode,
         # on the left (Y axis) in horizontal mode.
         if horizontal:
             children.append(_render_y_category_labels(
-                slot, labels, plot_left, plot_top, plot_bottom, axis_font,
+                slot, labels, plot_top, plot_bottom, axis_font,
             ))
         else:
             children.append(_render_x_axis_labels(
                 slot, labels, plot_left, plot_right, plot_bottom, axis_font,
             ))
 
-        svg_attrs: dict[str, Any] = {
-            "class": slot("svg"),
-            "viewBox": f"0 0 {width} {height}",
-            "width": str(width),
-            "height": str(height),
-            "role": "img",
-            "aria-label": _aria_summary(series, labels),
-        }
-        svg = Element(tag="svg", attrs=svg_attrs, children=tuple(children))
+        svg = plot_svg(
+            slot, children, height=height, margin_left=margin_left,
+            aria_label=_aria_summary(series, labels),
+        )
 
         wrapper_children: list[Element] = [svg]
         if show_legend and len(series) > 1:
@@ -478,8 +508,7 @@ def _aria_summary(series: list[Series], labels: list[str]) -> str:
         "chart.summary_across", kind=text("chart.bar"), what=what, names=names)
 
 def _render_axis_layer(
-    slot, ticks: list[float], y_scale, plot_left: float,
-    plot_right: float, axis_font: int,
+    slot, ticks: list[float], y_scale, axis_font: int,
     show_axis: bool, show_gridlines: bool, y_format,
     y_unit: str | None = None,
 ) -> Element:
@@ -487,7 +516,7 @@ def _render_axis_layer(
     structural group class. (The HORIZONTAL variant below is a genuinely
     different renderer, not a copy : bottom axis, vertical gridlines.)"""
     return render_axis_layer(
-        slot, ticks, y_scale, plot_left, plot_right, axis_font,
+        slot, ticks, y_scale, axis_font,
         show_axis, show_gridlines, y_format, y_unit,
         group_class="bz-bar-axes",
     )
@@ -504,15 +533,18 @@ def _hit_rect(
     the visible bar (sibling ``.bz-bar-fill``) is pointer-inert. The
     runtime reads ``.bz-bar-hit`` and anchors the tooltip on that sibling,
     so it still lands on the data point, not the top of the column.
+
+    ``x`` and ``width`` are in percent of the plot (both orientations
+    pass horizontal quantities there), ``y`` and ``height`` in pixels.
     """
     cls = "bz-bar-hit fill-transparent"
     if on_item_click:
         cls += " cursor-pointer"
     attrs: dict[str, Any] = {
         "class": cls,
-        "x": _fmt(x),
+        "x": _pct(x),
         "y": _fmt(y),
-        "width": _fmt(width),
+        "width": _pct(width),
         "height": _fmt(height),
         "data-bz-display": display,
         "bz-on:mouseenter": "show($event)",
@@ -576,9 +608,9 @@ def _render_bars_layer(
             # spotlight + tooltip anchor stay column-local.
             col_children: list[Element] = [Element(tag="rect", attrs={
                 "class": bar_cls,
-                "x": _fmt(x),
+                "x": _pct(x),
                 "y": _fmt(top_y),
-                "width": _fmt(bar_w),
+                "width": _pct(bar_w),
                 "height": _fmt(h),
                 "rx": "2",
             }, children=())]
@@ -587,7 +619,7 @@ def _render_bars_layer(
                 text_y = top_y - 4 if positive else bottom_y + value_font + 2
                 col_children.append(Element(tag="text", attrs={
                     "class": value_label_cls,
-                    "x": _fmt(x + bar_w / 2),
+                    "x": _pct(x + bar_w / 2),
                     "y": _fmt(text_y),
                     "font-size": str(value_font),
                     "text-anchor": "middle",
@@ -636,7 +668,7 @@ def _render_stacked_bars_layer(
         band_left = plot_left + cat_idx * band_w + (band_w - bar_w) / 2
         accum = 0.0
         label = series[0].data[cat_idx][0]
-        for s_idx, s in enumerate(series):
+        for _s_idx, s in enumerate(series):
             value = float(s.data[cat_idx][1])
             if value <= 0:
                 continue
@@ -650,9 +682,9 @@ def _render_stacked_bars_layer(
             cls = (bar_cls + " cursor-pointer") if on_item_click else bar_cls
             attrs: dict[str, Any] = {
                 "class": cls,
-                "x": _fmt(band_left),
+                "x": _pct(band_left),
                 "y": _fmt(seg_top_y),
-                "width": _fmt(bar_w),
+                "width": _pct(bar_w),
                 "height": _fmt(seg_h),
                 # No ``rx`` on stacked segments — rounded corners between
                 # segments break the stack's visual continuity.
@@ -678,7 +710,7 @@ def _render_stacked_bars_layer(
         if show_values and accum > 0:
             children.append(Element(tag="text", attrs={
                 "class": value_label_cls,
-                "x": _fmt(band_left + bar_w / 2),
+                "x": _pct(band_left + bar_w / 2),
                 "y": _fmt(y_scale(accum) - 4),
                 "font-size": str(value_font),
                 "text-anchor": "middle",
@@ -742,9 +774,9 @@ def _render_bars_horizontal(
             prefix = f"{s.name} — " if s.name else ""
             col_children: list[Element] = [Element(tag="rect", attrs={
                 "class": bar_cls,
-                "x": _fmt(left_x),
+                "x": _pct(left_x),
                 "y": _fmt(y),
-                "width": _fmt(w),
+                "width": _pct(w),
                 "height": _fmt(bar_h),
                 "rx": "2",
             }, children=())]
@@ -752,12 +784,13 @@ def _render_bars_horizontal(
             if show_values:
                 # Value label at the bar's tip — right of the bar for
                 # positive values, left for negative. ``dominant-
-                # baseline: middle`` keeps it on the row's center.
-                text_x = right_x + 4 if positive else left_x - 4
+                # baseline: middle`` keeps it on the row's center. The
+                # 4-px gap is a ``dx``: the tip is a percentage.
                 text_anchor = "start" if positive else "end"
                 col_children.append(Element(tag="text", attrs={
                     "class": value_label_cls,
-                    "x": _fmt(text_x),
+                    "x": _pct(right_x if positive else left_x),
+                    "dx": "4" if positive else "-4",
                     "y": _fmt(y + bar_h / 2),
                     "font-size": str(value_font),
                     "text-anchor": text_anchor,
@@ -805,7 +838,7 @@ def _render_stacked_bars_horizontal(
         band_top = plot_top + cat_idx * band_h + (band_h - bar_h) / 2
         accum = 0.0
         label = series[0].data[cat_idx][0]
-        for s_idx, s in enumerate(series):
+        for _s_idx, s in enumerate(series):
             value = float(s.data[cat_idx][1])
             if value <= 0:
                 continue
@@ -819,9 +852,9 @@ def _render_stacked_bars_horizontal(
             cls = (bar_cls + " cursor-pointer") if on_item_click else bar_cls
             attrs: dict[str, Any] = {
                 "class": cls,
-                "x": _fmt(seg_left_x),
+                "x": _pct(seg_left_x),
                 "y": _fmt(band_top),
-                "width": _fmt(seg_w),
+                "width": _pct(seg_w),
                 "height": _fmt(bar_h),
                 "data-bz-display": f"{prefix}{label}: {display}",
                 "bz-on:mouseenter": "show($event)",
@@ -843,7 +876,8 @@ def _render_stacked_bars_horizontal(
         if show_values and accum > 0:
             children.append(Element(tag="text", attrs={
                 "class": value_label_cls,
-                "x": _fmt(value_scale(accum) + 4),
+                "x": _pct(value_scale(accum)),
+                "dx": "4",
                 "y": _fmt(band_top + bar_h / 2),
                 "font-size": str(value_font),
                 "text-anchor": "start",
@@ -871,7 +905,7 @@ def _fits_label(extent: float, value_font: int) -> bool:
 
 def _render_stacked_100_bars_horizontal(
     slot, series: list[Series],
-    plot_left: float, plot_top: float, plot_bottom: float,
+    plot_px: float, plot_top: float, plot_bottom: float,
     value_scale, bar_pad: float, value_font: int, show_values: bool,
     y_format, y_unit: str | None = None,
     *, on_item_click, component_id: str, modifier: str | None,
@@ -891,6 +925,11 @@ def _render_stacked_100_bars_horizontal(
     (Both parameters were in the signature without ever being read —
     ``show_values=True`` was silently ignored on that one variant, audit
     F32.)
+
+    ``plot_px`` is the plot's width in pixels as far as the server knows
+    it (``width=``, or the nominal width when the chart fills its
+    container): a segment's width is a percentage, and whether its label
+    fits is a question in pixels.
     """
     plot_h = plot_bottom - plot_top
     n_cats = len(series[0].data)
@@ -913,7 +952,7 @@ def _render_stacked_100_bars_horizontal(
             continue
         accum = 0.0
         label = series[0].data[cat_idx][0]
-        for s_idx, s in enumerate(series):
+        for _s_idx, s in enumerate(series):
             value = float(s.data[cat_idx][1])
             if value <= 0:
                 continue
@@ -931,9 +970,9 @@ def _render_stacked_100_bars_horizontal(
             cls = (bar_cls + " cursor-pointer") if on_item_click else bar_cls
             attrs: dict[str, Any] = {
                 "class": cls,
-                "x": _fmt(seg_left_x),
+                "x": _pct(seg_left_x),
                 "y": _fmt(band_top),
-                "width": _fmt(seg_w),
+                "width": _pct(seg_w),
                 "height": _fmt(bar_h),
                 "data-bz-display": f"{prefix}{label}: {display}",
                 "bz-on:mouseenter": "show($event)",
@@ -951,10 +990,12 @@ def _render_stacked_100_bars_horizontal(
                     ctx=ctx,
                 ))
             children.append(Element(tag="rect", attrs=attrs, children=()))
-            if show_values and _fits_label(seg_w, value_font):
+            if show_values and _fits_label(
+                seg_w / PLOT_SPAN * plot_px, value_font,
+            ):
                 children.append(Element(tag="text", attrs={
                     "class": slot("segment_label", s.color or None),
-                    "x": _fmt(seg_left_x + seg_w / 2),
+                    "x": _pct(seg_left_x + seg_w / 2),
                     "y": _fmt(band_top + bar_h / 2),
                     "font-size": str(value_font),
                     "text-anchor": "middle",
@@ -998,7 +1039,7 @@ def _render_stacked_100_bars_vertical(
             continue
         accum = 0.0
         label = series[0].data[cat_idx][0]
-        for s_idx, s in enumerate(series):
+        for _s_idx, s in enumerate(series):
             value = float(s.data[cat_idx][1])
             if value <= 0:
                 continue
@@ -1016,9 +1057,9 @@ def _render_stacked_100_bars_vertical(
             cls = (bar_cls + " cursor-pointer") if on_item_click else bar_cls
             attrs: dict[str, Any] = {
                 "class": cls,
-                "x": _fmt(band_left),
+                "x": _pct(band_left),
                 "y": _fmt(seg_top_y),
-                "width": _fmt(bar_w),
+                "width": _pct(bar_w),
                 "height": _fmt(seg_h),
                 "data-bz-display": f"{prefix}{label}: {display}",
                 "bz-on:mouseenter": "show($event)",
@@ -1039,7 +1080,7 @@ def _render_stacked_100_bars_vertical(
             if show_values and _fits_label(seg_h, value_font):
                 children.append(Element(tag="text", attrs={
                     "class": slot("segment_label", s.color or None),
-                    "x": _fmt(band_left + bar_w / 2),
+                    "x": _pct(band_left + bar_w / 2),
                     "y": _fmt(seg_top_y + seg_h / 2),
                     "font-size": str(value_font),
                     "text-anchor": "middle",
@@ -1071,8 +1112,8 @@ def _render_axis_layer_horizontal(
         # Bottom value-axis line spans from leftmost to rightmost tick.
         children.append(Element(tag="line", attrs={
             "class": axis_cls,
-            "x1": _fmt(value_scale(ticks[0])),
-            "x2": _fmt(value_scale(ticks[-1])),
+            "x1": _pct(value_scale(ticks[0])),
+            "x2": _pct(value_scale(ticks[-1])),
             "y1": _fmt(plot_bottom),
             "y2": _fmt(plot_bottom),
         }, children=()))
@@ -1081,13 +1122,13 @@ def _render_axis_layer_horizontal(
         if show_gridlines:
             children.append(Element(tag="line", attrs={
                 "class": gridline_cls,
-                "x1": _fmt(tx), "x2": _fmt(tx),
+                "x1": _pct(tx), "x2": _pct(tx),
                 "y1": _fmt(plot_top), "y2": _fmt(plot_bottom),
             }, children=()))
         if show_axis:
             children.append(Element(tag="text", attrs={
                 "class": label_cls,
-                "x": _fmt(tx),
+                "x": _pct(tx),
                 "y": _fmt(plot_bottom + axis_font + 8),
                 "font-size": str(axis_font),
                 "text-anchor": "middle",
@@ -1097,12 +1138,12 @@ def _render_axis_layer_horizontal(
 
 
 def _render_y_category_labels(
-    slot, labels: list[str], plot_left: float, plot_top: float,
+    slot, labels: list[str], plot_top: float,
     plot_bottom: float, axis_font: int,
 ) -> Element:
     """Category labels stacked on the Y axis — one per row, right-
-    aligned to the plot's left edge so they read into the rows they
-    label.
+    aligned 6 px left of the plot's edge so they read into the rows they
+    label (in the margin ``axis_margin`` sized for the widest).
     """
     plot_h = plot_bottom - plot_top
     band_h = plot_h / len(labels)
@@ -1111,7 +1152,7 @@ def _render_y_category_labels(
     for i, label in enumerate(labels):
         children.append(Element(tag="text", attrs={
             "class": label_cls,
-            "x": _fmt(plot_left - 6),
+            "x": "-6",
             "y": _fmt(plot_top + (i + 0.5) * band_h),
             "font-size": str(axis_font),
             "text-anchor": "end",
@@ -1122,38 +1163,45 @@ def _render_y_category_labels(
 
 
 def _render_reference_lines_horizontal(
-    slot, refs, value_scale,
-    plot_top: float, plot_bottom: float, axis_font: int,
-    y_format, y_unit: str | None,
+    slot, refs, value_scale, plot_top: float, plot_bottom: float,
 ) -> Element:
     """Vertical reference lines for horizontal-orientation charts — at
-    ``value_scale(value)`` on the X axis, label rides at the top."""
+    ``value_scale(value)`` on the X axis. Behind the bars; their labels
+    are painted over them (:func:`_render_reference_labels_horizontal`).
+    """
     children: list[Element] = []
     for r in refs:
-        colour = r.color or "muted"
-        tx = value_scale(float(r.value))
+        tx = _pct(value_scale(float(r.value)))
         children.append(Element(tag="line", attrs={
-            "class": slot("reference_line", colour),
-            "x1": _fmt(tx), "x2": _fmt(tx),
+            "class": slot("reference_line", r.color or "muted"),
+            "x1": tx, "x2": tx,
             "y1": _fmt(plot_top), "y2": _fmt(plot_bottom),
             "stroke-dasharray": "4 4",
         }, children=()))
-        value_str = format_value(float(r.value), y_format, y_unit)
-        label = (
-            f"{r.label} ({value_str})" if r.label else value_str
-        )
-        # Label sits just above the line at the top of the plot,
-        # rotated 0 (horizontal text). text-anchor: start so it
-        # extends to the right of the reference line.
+    return Element(
+        tag="g", attrs={"class": "bz-bar-refs"},
+        children=tuple(children),
+    )
+
+
+def _render_reference_labels_horizontal(
+    slot, refs, value_scale, plot_top: float, axis_font: int,
+    y_format, y_unit: str | None,
+) -> Element:
+    """The labels of the vertical reference lines: at the top of the
+    plot, starting 4 px right of their line, over the bars."""
+    children: list[Element] = []
+    for r in refs:
         children.append(Element(tag="text", attrs={
-            "class": slot("reference_label", colour),
-            "x": _fmt(tx + 4),
+            "class": slot("reference_label", r.color or "muted"),
+            "x": _pct(value_scale(float(r.value))),
+            "dx": "4",
             "y": _fmt(plot_top + axis_font),
             "text-anchor": "start",
             "font-size": str(axis_font),
-        }, children=(TextNode(label),)))
+        }, children=(TextNode(_reference_text(r, y_format, y_unit)),)))
     return Element(
-        tag="g", attrs={"class": "bz-bar-refs"},
+        tag="g", attrs={"class": "bz-bar-ref-labels"},
         children=tuple(children),
     )
 
@@ -1169,7 +1217,7 @@ def _render_x_axis_labels(
     for i, label in enumerate(labels):
         children.append(Element(tag="text", attrs={
             "class": label_cls,
-            "x": _fmt(plot_left + (i + 0.5) * band_w),
+            "x": _pct(plot_left + (i + 0.5) * band_w),
             "y": _fmt(plot_bottom + axis_font + 8),
             "font-size": str(axis_font),
             "text-anchor": "middle",

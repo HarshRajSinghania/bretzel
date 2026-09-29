@@ -82,18 +82,16 @@ class EmptyState(Component):
         # already carried an ``icon_size`` token per step, never wired
         # up: the box went from ``h-8`` to ``h-20`` (2.5 times) while the
         # glyph stayed frozen at ``Icon``'s default. Same remedy as
-        # Badge's (``_adopt_icon``) — we only re-size the STRING
+        # Badge's (``adopt_slot(icon_size=…)``) — we only re-size the STRING
         # shortcut; a ``ui.icon(size=…)`` built by the caller carries an
         # explicit intent we do not overwrite.
         if isinstance(icon, str):
-            from bretzel.components.primitives.icon.icon import Icon
-
             size_map = self._resolved_theme().get("sizes", {}).get(
                 self._reactive_values.get("size") or "md", {}
             )
             self._slot_components["icon"] = Component.adopt_slot(
-                Icon(icon, size=size_map.get("icon_size", "lg")),
-                icon_shortcut=True,
+                icon, icon_shortcut=True,
+                icon_size=size_map.get("icon_size", "lg"),
             )
 
     def render(self) -> Element:

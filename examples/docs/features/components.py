@@ -16,7 +16,6 @@ from bretzel import page, ui
 
 from examples.docs.features.shell import shell
 from examples.docs.lib.blocks import component_mirror, helper_mirror
-from examples.docs.lib.i18n import tr
 from bretzel.introspect import (
     ComponentInfo,
     HelperInfo,
@@ -54,7 +53,7 @@ def family_card(label: str, icon: str, components: list[ComponentInfo]) -> None:
                         component_mirror(info)
 
 
-@page(PATH, layout=shell, title="Catalogue ui.*")
+@page(PATH, layout=shell, title="ui.* catalogue")
 def components_page() -> None:
     infos = [describe_ui_symbol(n) for n in ui_symbol_names()]
     components = [i for i in infos if isinstance(i, ComponentInfo)]
@@ -66,41 +65,40 @@ def components_page() -> None:
 
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):
-            ui.heading("Catalogue ui.*", level=1, size="3xl")
+            ui.heading("ui.* catalogue", level=1, size="3xl")
             ui.text(
-                tr('The whole `ui.*` surface read live from the code — '
-                   'signature, bindable props, events, slots, imperative '
-                   'methods. This page introspects the classes at render '
-                   'time: it cannot fall out of step with the framework.',
-                   'Toute la surface `ui.*` lue en direct dans le code — '
-                   'signature, props bindables, events, slots, méthodes '
-                   'impératives. Cette page introspecte les classes au render'
-                   ' : elle ne peut pas se désynchroniser du framework.'),
+                'The whole `ui.*` surface read live from the code — '
+                'signature, bindable props, events, slots, imperative '
+                'methods. This page introspects the classes at render '
+                'time: it cannot fall out of step with the framework.',
                 color="muted", size="lg",
             )
+            ui.alert(
+                "Every component in real uses, with the code that renders "
+                "it, under a theme you can switch and tune.",
+                title="See them rendered: the component gallery",
+                icon="layout-grid",
+                color="info",
+            )
+            ui.button("Open the component gallery", href="https://ui.bretzel-py.dev",
+                      external=True, icon_right="external-link", variant="soft",
+                      color="info", size="sm", classes="self-start")
             with ui.hstack(gap="sm", wrap=True):
-                ui.badge(f"{len(components)} composants", color="primary",
+                ui.badge(f"{len(components)} components", color="primary",
                          variant="soft")
                 ui.badge(f"{len(helpers)} helpers", color="warning",
                          variant="soft")
 
             with ui.card(color="surface"):
                 with ui.vstack(gap="xs"):
-                    ui.heading("Composant ou helper ?", level=3)
+                    ui.heading("Component or helper?", level=3)
                     ui.text(
-                        tr('`ui.*` is not homogeneous. A component renders '
-                           'and carries a contract (bindable props, events, '
-                           'slots, imperative methods). A helper — `ui.each` '
-                           '(iteration), `ui.notification` (toast), '
-                           '`ui.column` (a column descriptor) — is only a '
-                           'function. Both are listed, but not mixed.',
-                           "`ui.*` n'est pas homogène. Un composant se rend "
-                           'et porte un contrat (props bindables, events, '
-                           'slots, méthodes impératives). Un helper — '
-                           '`ui.each` (itération), `ui.notification` (toast),'
-                           " `ui.column` (descripteur de colonne) — n'est "
-                           "qu'une fonction. Les deux sont listés, mais pas "
-                           'mélangés.'),
+                        '`ui.*` is not homogeneous. A component renders '
+                        'and carries a contract (bindable props, events, '
+                        'slots, imperative methods). A helper — `ui.each` '
+                        '(iteration), `ui.notification` (toast), '
+                        '`ui.column` (a column descriptor) — is only a '
+                        'function. Both are listed, but not mixed.',
                         color="muted", size="sm",
                     )
 
@@ -117,10 +115,8 @@ def components_page() -> None:
                         ui.badge(str(len(helpers)), color="muted",
                                  variant="outline")
                     ui.text(
-                        tr('These symbols live in `ui.*` but are NOT '
-                           'components — no props, no events.',
-                           'Ces symboles vivent dans `ui.*` mais ne sont PAS '
-                           "des composants — pas de props, pas d'events."),
+                        'These symbols live in `ui.*` but are NOT '
+                        'components — no props, no events.',
                         color="muted", size="sm",
                     )
                     with ui.accordion(multiple=True):

@@ -49,7 +49,9 @@ _EXPECTED: dict[str, frozenset[str]] = {
     # ``href`` depuis le 2026-08-23 — même raison que chez Link, dont
     # il partage le rôle : la destination peut dépendre de l'état.
     "Button": frozenset({"label", "disabled", "loading", "href"}),
-    "IconButton": frozenset({"disabled", "loading"}),
+    # ``href`` depuis le 2026-09-29 : le même bouton sans texte, la même
+    # règle — il ne pouvait pas naviguer, ``ui.button`` si.
+    "IconButton": frozenset({"disabled", "loading", "href"}),
     "Link": frozenset({"label", "href"}),
     # ── Inputs ───────────────────────────────────────────────────────
     # ``min`` / ``max`` restent ∅ contrairement à la famille date : la

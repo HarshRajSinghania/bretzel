@@ -75,6 +75,9 @@ from pathlib import Path
 import pytest
 
 from tests.consistency._discovery import (
+    called_names,
+    except_names,
+    is_silent_handler,
     public_component_classes,
     rendered_html_of,
 )
@@ -121,53 +124,16 @@ _PROBE_KWARG_DEBT: dict[str, str] = {
 }
 
 
-def _handler_names(handler: ast.ExceptHandler) -> set[str]:
-    node = handler.type
-    if node is None:
-        return {"BaseException"}
-    if isinstance(node, ast.Name):
-        return {node.id}
-    if isinstance(node, ast.Tuple):
-        return {e.id for e in node.elts if isinstance(e, ast.Name)}
-    if isinstance(node, ast.Attribute):
-        return {node.attr}
-    return set()
-
-
-def _calls_in(node: ast.AST) -> set[str]:
-    out: set[str] = set()
-    for sub in ast.walk(node):
-        if isinstance(sub, ast.Call):
-            func = sub.func
-            name = getattr(func, "attr", None) or getattr(func, "id", None)
-            if name:
-                out.add(name)
-    return out
-
-
-def _is_silent(handler: ast.ExceptHandler) -> bool:
-    body = handler.body
-    if len(body) != 1:
-        return False
-    if isinstance(body[0], (ast.Continue, ast.Pass)):
-        return True
-    return (
-        isinstance(body[0], ast.Return)
-        and isinstance(body[0].value, ast.Constant)
-        and body[0].value.value is None
-    )
-
-
 def swallowing_lines(tree: ast.AST) -> list[int]:
     """Les lignes où un ``except`` large au corps vide entoure un rendu."""
     out: list[int] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Try):
             continue
-        if not _calls_in(node) & _RENDER_CALLS:
+        if not called_names(node) & _RENDER_CALLS:
             continue
         for handler in node.handlers:
-            if _handler_names(handler) & _BROAD and _is_silent(handler):
+            if except_names(handler) & _BROAD and is_silent_handler(handler):
                 out.append(handler.lineno)
     return out
 
@@ -248,7 +214,7 @@ def test_the_detector_still_bites() -> None:
     """Mutation : le détecteur reconnaît encore le motif exact interdit.
 
     Les tests ci-dessus sont des interdictions ; ils passeraient tout
-    aussi bien si ``_calls_in`` cessait de reconnaître un rendu. On le
+    aussi bien si ``called_names`` cessait de reconnaître un rendu. On le
     vérifie donc sur un cas fabriqué, et sur son jumeau licite.
     """
     faulty = ast.parse(
@@ -261,7 +227,7 @@ def test_the_detector_still_bites() -> None:
     )
     assert swallowing_lines(faulty), (
         "Le détecteur ne voit plus le motif qu'il existe pour interdire — "
-        "vérifie _calls_in / _handler_names avant de croire les gates saines."
+        "vérifie called_names / except_names avant de croire les gates saines."
     )
 
     declared = ast.parse(

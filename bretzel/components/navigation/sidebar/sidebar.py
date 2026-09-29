@@ -77,7 +77,7 @@ from bretzel.components.navigation.sidebar.theme import (
 from bretzel.components.primitives.divider import Divider
 from bretzel.components.primitives.icon import Icon
 from bretzel.components.primitives.menu_item import MenuItem
-from bretzel.core.tree import Element
+from bretzel.core.tree import Element, Node
 from bretzel.core.tree import TextNode as TextNode
 from bretzel.render import text
 from bretzel.render.context import maybe_current_context
@@ -327,6 +327,18 @@ class Sidebar(Component):
         # ``data-collapse`` replaces ``data-variant``: it is the mode
         # that is carried, and the name follows the prop.
         attrs.setdefault("data-collapse", mode)
+        # A CLOSED ``overlay`` is slid off screen and a closed
+        # ``offcanvas`` is zero wide — yet their links stayed in the Tab
+        # order: the keyboard walked into a panel nobody sees (measured
+        # at 390 px in the product's cockpit, links at x = -111 px).
+        # ``inert`` takes the closed panel out of focus, pointer and
+        # assistive tech at once, and ``bz-attr`` removes it when the
+        # expression is false. ``rail`` keeps its icons usable, and
+        # ``none`` never closes.
+        if mode in ("overlay", "offcanvas"):
+            if not open_initial:
+                attrs["inert"] = ""
+            attrs["bz-attr:inert"] = f"!({data_open_expr})"
 
         # bz-data layout :
         #  - ``current_path`` : same path tracking as before, used by
@@ -1250,6 +1262,13 @@ def _footer_initials(name: Any) -> str:
     return (parts[0][0] + parts[-1][0]).upper()
 
 
+def _is_image_source(avatar: str) -> bool:
+    """True when the footer's ``avatar`` string names an image rather than
+    initials: a path or URL (it has a ``/``) or a ``data:`` URI. Initials
+    carry neither — before this, a photo URL was printed in the chip."""
+    return "/" in avatar or avatar.startswith("data:")
+
+
 class SidebarFooter(Component):
     """Render the footer region of a sidebar."""
 
@@ -1259,7 +1278,7 @@ class SidebarFooter(Component):
 
     name: str = reactive_prop(default="", emit_attr=False)
     subtitle: str | None = reactive_prop(default=None, emit_attr=False)
-    # ``never_code``: the string form is an image URL — same family as
+    # ``never_code``: the string form may be an image URL — same family as
     # ``ui.avatar(src=)``, so the same exposure to the false positive.
     avatar: str | Component | None = reactive_prop(
         default=None, emit_attr=False, never_code=True
@@ -1302,12 +1321,20 @@ class SidebarFooter(Component):
                 children=(avatar.render(),),
             )
         # ``avatar`` is now ``str | None`` (the Component case returned
-        # above) : use it as initials text if given, else derive from name
+        # above). An image source fills the chip; any other text is the
+        # initials; nothing derives them from the name
         # (``_footer_initials`` owns the fallback for a non-textual name).
-        text = avatar or _footer_initials(name)
+        if isinstance(avatar, str) and _is_image_source(avatar):
+            # ``alt=""``: the name is written right beside it, a screen
+            # reader must not announce the person twice (same rule as
+            # ``ui.avatar``).
+            content: Node = Element(tag="img", attrs={
+                "src": avatar, "alt": "", "class": "h-full w-full object-cover",
+            }, children=())
+        else:
+            content = TextNode(avatar or _footer_initials(name))
         return Element(
-            tag="span", attrs={"class": avatar_cls},
-            children=(TextNode(text),),
+            tag="span", attrs={"class": avatar_cls}, children=(content,),
         )
 
     def render(self) -> Element:

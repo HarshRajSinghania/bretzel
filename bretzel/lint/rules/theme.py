@@ -51,7 +51,7 @@ from __future__ import annotations
 
 import ast
 
-from bretzel.lint.corpus import Module
+from bretzel.lint.corpus import Module, derived
 from bretzel.lint.report import Finding
 from bretzel.lint.rules._theme_calls import component_maps, dict_items
 
@@ -73,13 +73,13 @@ def _index() -> dict[str, dict[str, frozenset[str]]]:
     """
     from bretzel.introspect import theme_vocabulary
 
-    return theme_vocabulary()
+    return derived(f"{RULE}.index", theme_vocabulary)
 
 
 def check(module: Module) -> list[Finding]:
     """The theme names nothing will read."""
     findings: list[Finding] = []
-    calls = list(component_maps(module.tree))
+    calls = list(component_maps(module))
     if not calls:
         return findings
 

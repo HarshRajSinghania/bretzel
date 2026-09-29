@@ -292,7 +292,7 @@ def check(module: Module) -> list[Finding]:
     """The ``classes=`` entries a prop of the same call already sets."""
     calls = [
         node
-        for node in ast.walk(module.tree)
+        for node in module.nodes
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name)

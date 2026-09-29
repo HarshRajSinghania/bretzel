@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from bretzel.components.base.attrs import ComponentUsageError
 from bretzel.components.base.testing import render_isolated
 from bretzel.components.layout.carousel import Carousel
+from bretzel.components.layout.carousel.carousel import _gap_length
 from bretzel.components.primitives.text import Text
 from bretzel.core.serialize import serialize
 from bretzel.state.scopes.client import ClientBinding
@@ -148,8 +151,10 @@ class TestDerivedControls:
 class TestPerView:
     @pytest.mark.parametrize(
         "per_view,expected",
-        [(1, "basis-full"), (2, "basis-1/2"), (3, "basis-1/3"),
-         (4, "basis-1/4")],
+        [(1, "basis-full"),
+         (2, "basis-[calc((100%_-_1*var(--bz-gap))/2)]"),
+         (3, "basis-[calc((100%_-_2*var(--bz-gap))/3)]"),
+         (4, "basis-[calc((100%_-_3*var(--bz-gap))/4)]")],
     )
     def test_per_view_sets_the_slide_width(self, per_view, expected) -> None:
         assert expected in _html(per_view=per_view)
@@ -157,7 +162,49 @@ class TestPerView:
     def test_responsive_per_view_prefixes_every_breakpoint(self) -> None:
         out = _html(per_view={"base": 1, "md": 3})
         assert "basis-full" in out
-        assert "md:basis-1/3" in out
+        assert "md:basis-[calc((100%_-_2*var(--bz-gap))/3)]" in out
+
+    def test_n_slides_and_their_gaps_fill_the_track(self) -> None:
+        """The defect of 2026-09-29: ``basis-1/3`` gave each slide a third
+        of the track PLUS the two gaps, so the third card overflowed by
+        24 px. Evaluated here as CSS would, for a 900-px track."""
+        out = _html(per_view=3, gap="md")
+        basis = re.search(
+            r"basis-\[calc\(\(100%_-_(\d+)\*var\(--bz-gap\)\)/(\d+)\)\]", out)
+        assert basis, out
+        gaps_subtracted, count = int(basis.group(1)), int(basis.group(2))
+        track, gap = 900.0, 12.0  # gap-4 at the default 3-px spacing
+        slide = (track - gaps_subtracted * gap) / count
+        assert count * slide + (count - 1) * gap == track
+
+    def test_the_track_declares_its_gap_as_a_length(self) -> None:
+        out = _html(per_view=3, gap="md")
+        assert 'style="--bz-gap:calc(var(--spacing) * 4)"' in out
+
+    def test_a_table_miss_is_computed_by_the_same_formula(self) -> None:
+        assert "basis-[calc((100%_-_13*var(--bz-gap))/14)]" in _html(
+            per_view=14, slides=20)
+
+
+class TestGapLength:
+    @pytest.mark.parametrize(
+        "classes,expected",
+        [("gap-4", "calc(var(--spacing) * 4)"),
+         ("gap-0", "calc(var(--spacing) * 0)"),
+         ("gap-0.5", "calc(var(--spacing) * 0.5)"),
+         ("gap-x-6", "calc(var(--spacing) * 6)"),
+         ("gap-px", "1px"),
+         ("gap-[20px]", "20px"),
+         ("gap-[calc(1rem_+_2px)]", "calc(1rem + 2px)"),
+         ("gap-(--my-gap)", "var(--my-gap)"),
+         ("flex gap-2", "calc(var(--spacing) * 2)")],
+    )
+    def test_reads_every_tailwind_form(self, classes, expected) -> None:
+        assert _gap_length(classes) == expected
+
+    @pytest.mark.parametrize("classes", ["", "gap-y-4", "space-x-4"])
+    def test_an_unknown_form_is_no_gap(self, classes) -> None:
+        assert _gap_length(classes) == "0px"
 
     @pytest.mark.parametrize("base_key", ["base", "xs", "default", ""])
     def test_every_base_key_spelling_decides_the_dots(

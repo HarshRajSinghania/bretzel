@@ -9,7 +9,7 @@ Pour connaître la surface livrée :
 ```powershell
 bretzel describe
 bretzel describe button
-bretzel describe ClientBinding
+bretzel describe button refreshable ClientBinding   # plusieurs fiches, un appel
 ```
 
 `describe` dérive les signatures, bindings, événements, slots, commandes

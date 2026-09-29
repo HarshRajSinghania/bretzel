@@ -113,26 +113,29 @@ def size_vocabulary(theme: Mapping[str, Any] | None) -> frozenset[str]:
 #: this table only generalises that intention to labels that are NOT
 #: 16 px.
 #:
-#: ``Icon``'s default was calibrated against body text (18/16 = 1.125).
-#: The items have labels of 12 to 14 px, and using it as-is gave up to
-#: 1.50 there (``breadcrumb_item``, measured on 2026-08-18).
+#: ``Icon``'s default was calibrated against body text (``text-lg`` over
+#: ``text-base``). The items have smaller labels, and using it as-is gave
+#: up to 1.50 there (``breadcrumb_item``, measured on 2026-08-18).
 #:
-#: ``Icon``'s scale has a hole (``sm`` = 14 px then ``md`` = 18 px,
-#: nothing at 16): "the step above" is therefore read on ITS table, not
-#: on Tailwind's. Five of the eight item components already respected it
-#: before the rule was written.
+#: ``Icon``'s scale has a hole (``sm`` = ``text-sm``, 13 px, then ``md``
+#: = ``text-lg``, 16 px — nothing at 14): "the step above" is therefore
+#: read on ITS table, not on Tailwind's. Five of the eight item
+#: components already respected it before the rule was written.
+#:
+#: The pixel figures are the theme's default scale (``DEFAULT_TEXT``);
+#: the table itself speaks in steps, so a ``Theme(text=…)`` moves both
+#: sides together.
 #:
 #: ⚠️ An icon size that is NOT one step above must be DECLARED with its
 #: reason — ``bottom_bar_item`` goes up to 24 px because it is a touch
 #: target, not a line-of-text ornament. Gated by
 #: ``tests/consistency/test_icon_follows_its_label.py``.
 ICON_SIZE_ABOVE: Final[Mapping[str, str]] = {
-    "text-[10px]": "xs",   # 10 px → 12
-    "text-xs": "sm",       # 12 px → 14
-    "text-sm": "md",       # 14 px → 18
-    "text-base": "md",     # 16 px → 18
-    "text-lg": "lg",       # 18 px → 24
-    "text-xl": "lg",       # 20 px → 24
+    "text-xs": "sm",       # 11 px → 13
+    "text-sm": "md",       # 13 px → 16
+    "text-base": "md",     # 14 px → 16
+    "text-lg": "lg",       # 16 px → 22
+    "text-xl": "lg",       # 18 px → 22
 }
 
 

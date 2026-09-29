@@ -112,7 +112,7 @@ class TestRuntimeWiring:
         assert "_delay: 500" in bz_data
         assert "setTimeout" not in bz_data
         # Hover handlers ride ``bz-on:mouseenter`` / ``bz-on:mouseleave``.
-        assert el.attrs.get("bz-on:mouseenter") == "_show()"
+        assert el.attrs.get("bz-on:mouseenter") == "_show($el)"
         assert el.attrs.get("bz-on:mouseleave") == "_hide()"
 
     def test_focus_handlers_for_keyboard_a11y(self) -> None:
@@ -121,8 +121,10 @@ class TestRuntimeWiring:
                 Button("X", size="sm")
             el = t.render()
         # V3 : focus a11y rides ``bz-on:focusin`` / ``bz-on:focusout``.
-        assert el.attrs.get("bz-on:focusin") == "_show()"
+        assert el.attrs.get("bz-on:focusin") == "_show($el)"
         assert el.attrs.get("bz-on:focusout") == "_hide()"
+        assert el.attrs.get("bz-on:click") == "_hide()"
+        assert el.attrs.get("bz-on:open") == "_hide()"
 
 
 class TestTeleport:

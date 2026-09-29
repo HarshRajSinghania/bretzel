@@ -81,12 +81,15 @@ TABS_THEME: dict[str, Any] = {
         # ``col-start-1 row-start-1`` : all panels overlap in the same
         # grid cell of the parent ``.grid`` container (see
         # ``Tabs.render``) so a cross-fade doesn't stack them vertically.
-        "panel": "outline-none col-start-1 row-start-1",
+        # ``min-w-0``: a grid item defaults to ``min-width: auto``, so a
+        # wide child (a carousel track, a table) widened the whole tab
+        # column past its parent instead of scrolling or shrinking.
+        "panel": "outline-none col-start-1 row-start-1 min-w-0",
     },
     # Per-size dict — applied to the pill badge (text size + padding).
     "sizes": {
-        "xs": {"pill": "text-[10px] px-2 py-0.5"},
-        "sm": {"pill": "text-xs px-2.5 py-1"},
+        "xs": {"pill": "text-xs px-2 py-0.5"},
+        "sm": {"pill": "text-sm px-2.5 py-1"},
         "md": {"pill": "text-sm px-3 py-1"},
         "lg": {"pill": "text-base px-4 py-1.5"},
         "xl": {"pill": "text-lg px-5 py-2"},

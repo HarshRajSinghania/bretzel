@@ -106,14 +106,14 @@ DATE_RANGE_PICKER_THEME: dict[str, Any] = {
         },
         "input_field": {
             "xs": "text-xs",
-            "sm": "text-xs",
+            "sm": "text-sm",
             "md": "text-sm",
             "lg": "text-base",
             "xl": "text-lg",
         },
         "separator": {
             "xs": "text-xs",
-            "sm": "text-xs",
+            "sm": "text-sm",
             "md": "text-sm",
             "lg": "text-base",
             "xl": "text-lg",

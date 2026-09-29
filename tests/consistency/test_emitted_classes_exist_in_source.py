@@ -173,7 +173,7 @@ def _sources() -> str:
     parts: list[str] = []
     for pattern in ("bretzel/**/*.py", "examples/**/*.py", "bretzel/**/*.js"):
         for path in _ROOT.glob(pattern):
-            if "__pycache__" in str(path) or "archive" in str(path):
+            if {"__pycache__", "archive"} & set(path.relative_to(_ROOT).parts):
                 continue
             parts.append(path.read_text(encoding="utf-8-sig"))
     return "\n".join(parts)

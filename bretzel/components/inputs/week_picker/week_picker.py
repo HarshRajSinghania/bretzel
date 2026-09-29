@@ -37,6 +37,7 @@ from bretzel.components.base._wiring import (
     install_open_close_toggle,
     install_value_commands,
 )
+from bretzel.components.inputs._checkable import sized_slot
 from bretzel.components.inputs._picker_field import render_calendar_field, value_expr
 from bretzel.components.inputs._wiring import date_to_iso
 from bretzel.components.inputs.week_picker.theme import WEEK_PICKER_THEME
@@ -189,7 +190,7 @@ class WeekPicker(Component):
         cal_kwargs["on_change"] = "; ".join(picked)
 
         def sized(slot: str) -> str:
-            return self.slot_class(slot, size_cfg.get(slot, ""))
+            return sized_slot(self, slot, size_cfg)
 
         # A week's value is a scalar ISO date, so the mirror is EXACTLY
         # DatePicker's — default granularity, including its "only write

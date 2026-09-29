@@ -39,7 +39,7 @@ AVATAR_THEME: dict[str, Any] = {
         "square": "rounded-selector",
     },
     "sizes": {
-        "xs":  {"root": "h-6 w-6 text-[10px]",   "status": "h-1.5 w-1.5"},
+        "xs":  {"root": "h-6 w-6 text-xs",   "status": "h-1.5 w-1.5"},
         "sm":  {"root": "h-8 w-8 text-xs",       "status": "h-2 w-2"},
         "md":  {"root": "h-10 w-10 text-sm",     "status": "h-2.5 w-2.5"},
         "lg":  {"root": "h-12 w-12 text-base",   "status": "h-3 w-3"},

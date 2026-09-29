@@ -73,6 +73,27 @@ class TestSidebarRoot:
         # directive eval time).
         assert "current_path !== p" in out
 
+    @pytest.mark.parametrize("mode", ["overlay", "offcanvas"])
+    def test_a_closed_panel_leaves_the_tab_order(self, mode: str) -> None:
+        """Fermé, un ``overlay`` est hors écran et un ``offcanvas`` n'a
+        plus de largeur : leurs liens ne doivent plus se tabuler. Mesuré
+        à 390 px dans le cockpit du produit — liens à x = -111 px, que
+        le balayage de ``bretzel.probe`` trouvait au clavier."""
+        with render_isolated():
+            closed = serialize(Sidebar(collapsible=mode, open=False).render())
+            opened = serialize(Sidebar(collapsible=mode, open=True).render())
+        assert re.search(r'<aside[^>]*\sinert=""', closed), "fermé : inert dès le HTML"
+        assert 'bz-attr:inert="!(open)"' in closed
+        assert not re.search(r'<aside[^>]*\sinert=""', opened), "ouvert : pas inert"
+        assert 'bz-attr:inert="!(open)"' in opened, "et il le redevient en fermant"
+
+    @pytest.mark.parametrize("mode", ["rail", "none"])
+    def test_a_panel_that_stays_on_screen_is_never_inert(self, mode: str) -> None:
+        """Le versant qui borne : un rail garde ses icônes utilisables."""
+        with render_isolated():
+            out = serialize(Sidebar(collapsible=mode, open=False).render())
+        assert "inert" not in out
+
     def test_static_open_when_open_false(self) -> None:
         """``open=False`` bakes ``data-open="false"`` so the theme's
         ``data-[open=false]`` selectors fire on the first paint (before
@@ -125,7 +146,7 @@ class TestSidebarRoot:
 
     @pytest.mark.parametrize(
         ("width", "expected"),
-        [("sm", "w-48"), ("md", "w-64"), ("lg", "w-80")],
+        [("sm", "w-[12rem]"), ("md", "w-[16rem]"), ("lg", "w-[20rem]")],
     )
     def test_width_applies(self, width: str, expected: str) -> None:
         with render_isolated():
@@ -648,6 +669,26 @@ class TestSidebarFooter:
                     DropdownItem(label="Logout")
             out = serialize(sb.render())
         assert out.count(">JH<") == 1  # once, not standalone + footer
+
+    @pytest.mark.parametrize("url", [
+        "https://i.pravatar.cc/96?u=ada",
+        "/static/ada.png",
+        "data:image/png;base64,iVBORw0KGgo=",
+    ])
+    def test_an_avatar_url_is_an_image_not_initials(self, url: str) -> None:
+        """Mesuré le 2026-09-29 : ``avatar="<url>"`` écrivait l'URL dans
+        la puce, en majuscules, comme des initiales. Une URL est une image ;
+        le nom est écrit à côté, donc l'image est décorative (``alt=""``)."""
+        with render_isolated():
+            out = serialize(SidebarFooter(name="Ada Lovelace", avatar=url).render())
+        assert f'<img src="{url}" alt=""' in out
+        assert f">{url}<" not in out
+
+    def test_avatar_text_stays_initials(self) -> None:
+        with render_isolated():
+            out = serialize(SidebarFooter(name="Ada Lovelace", avatar="ZZ").render())
+        assert ">ZZ<" in out
+        assert "<img" not in out
 
     def test_trigger_selected_while_open(self) -> None:
         # The footer trigger mirrors the open flag onto ``data-menu-open``

@@ -35,10 +35,10 @@ def main() -> int:
     from tests.audit.harness import audit_server, browser_context
 
     ecarts: list[str] = []
-    with audit_server() as base:
+    with audit_server("examples.showcase.main:app") as base:
         with browser_context() as ctx:
             page = ctx.new_page()
-            page.goto(f"{base}/theme-studio", wait_until="networkidle")
+            page.goto(f"{base}/studio", wait_until="networkidle")
             page.wait_for_timeout(6000)
             vus = page.evaluate(
                 "(l) => l.map(h => (window.bzFg ? window.bzFg(h) : 'ABSENT'))",

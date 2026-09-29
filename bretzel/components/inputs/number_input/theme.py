@@ -59,9 +59,14 @@ NUMBER_INPUT_THEME: dict[str, Any] = {
         # One stepper button. Compact (half the input height each)
         # so they stack to match the input. ``cursor-pointer`` +
         # hover bg for affordance.
+        # ``min-h-0``: the two halves SHARE the shell's inner height. At
+        # ``xs`` that is 19 px, and a flex item's automatic minimum (its
+        # 11 px glyph box) made the pair 23 — the ▼ was cut by the
+        # shell's ``overflow-hidden``. Squeezed, only the empty margin of
+        # the 1em box overflows: a chevron is a quarter of its viewBox.
         "stepper": (
             "flex items-center justify-center "
-            "flex-1 px-2 "
+            "flex-1 min-h-0 px-2 "
             "text-muted not-disabled:hover:text-(--bz-text) "
             "not-disabled:hover:bg-(--bz-bg) "
             "cursor-pointer outline-none "
@@ -76,7 +81,7 @@ NUMBER_INPUT_THEME: dict[str, Any] = {
     # next to an Input lines up perfectly.
     "sizes": {
         "xs": {"shell": "h-7", "input": "px-2 text-xs"},
-        "sm": {"shell": "h-8", "input": "px-3 text-xs"},
+        "sm": {"shell": "h-8", "input": "px-3 text-sm"},
         "md": {"shell": "h-10", "input": "px-3 text-sm"},
         "lg": {"shell": "h-12", "input": "px-4 text-base"},
         "xl": {"shell": "h-14", "input": "px-5 text-lg"},

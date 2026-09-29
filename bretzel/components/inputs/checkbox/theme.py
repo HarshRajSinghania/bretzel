@@ -65,7 +65,7 @@ CHECKBOX_THEME: dict[str, Any] = {
     # single ``size="md"`` propagates the right value to each visual
     # element without exposing a per-slot prop.
     "sizes": {
-        "xs": {"box": "h-3 w-3",   "icon": "h-2 w-2",     "label": "text-[10px]"},
+        "xs": {"box": "h-3 w-3",   "icon": "h-2 w-2",     "label": "text-xs"},
         "sm": {"box": "h-4 w-4",   "icon": "h-3 w-3",     "label": "text-xs"},
         "md": {"box": "h-5 w-5",   "icon": "h-3.5 w-3.5", "label": "text-sm"},
         "lg": {"box": "h-6 w-6",   "icon": "h-4 w-4",     "label": "text-base"},

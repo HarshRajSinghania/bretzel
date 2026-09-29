@@ -217,6 +217,58 @@ def _fmt(n: float) -> str:
     return f"{round(n, 2):g}"
 
 
+# ───────────────────────────────────────────────────────────────────────
+# The horizontal axis is a PERCENTAGE of the plot
+# ───────────────────────────────────────────────────────────────────────
+#
+# The series charts (bar / line / scatter) fill their container. The
+# server cannot know that width, so no horizontal coordinate is written
+# in pixels: the ``<svg>`` IS the plot rectangle (its margins are CSS,
+# cf. ``_layers.plot_svg``), and every x is a share of it — ``x="37.5%"``
+# resolves against the svg's viewport, whatever it measures. The
+# vertical axis stays in pixels: its extent is the ``size=`` step.
+#
+# A fixed ``viewBox`` could not do it: it scales the whole drawing, so a
+# chart 600 wide in a 1000-px card either letterboxes (``meet``) or
+# swells its text by 67 %. A pixel offset from a percentage goes through
+# ``dx`` on a ``<text>`` (``x="100%" dx="-4"``); a plain number is a
+# pixel offset from the plot's LEFT edge (``x="-6"``, left of the axis).
+
+#: The span of the horizontal range, in percent of the plot width.
+PLOT_SPAN = 100.0
+
+
+def _pct(n: float) -> str:
+    """A horizontal coordinate or length, in percent of the plot width."""
+    return f"{_fmt(n)}%"
+
+
+#: The average advance of a glyph, in ems. The server has no font
+#: metrics; 0.6 em covers digits and lower-case letters of the sans
+#: stacks the themes ship (digits measure ~0.55 em) with a margin, so
+#: an estimate errs on the side of a little extra room — never a clip.
+_GLYPH_EM = 0.6
+
+
+def text_width(label: str, font_px: float) -> float:
+    """Estimated rendered width of ``label`` at ``font_px``, in pixels."""
+    return len(label) * font_px * _GLYPH_EM
+
+
+def axis_margin(labels: Iterable[str], font_px: float, *, floor: float) -> int:
+    """The room left of the plot for right-aligned axis labels.
+
+    The labels end 6 px left of the axis (``x="-6"``, ``text-anchor:
+    end``), so the margin must hold the WIDEST of them plus that gap. It
+    was a constant (48 px): a ``y_unit=" requests/s"`` label measured
+    ~100 px and started 58 px outside the chart, cut by any card with an
+    ``overflow`` other than visible. ``floor`` keeps the historical width
+    when the labels are short, so a chart that fitted does not move.
+    """
+    widest = max((text_width(label, font_px) for label in labels), default=0.0)
+    return max(int(floor), math.ceil(widest + 6 + 2))
+
+
 def line_path(points: list[tuple[float, float]]) -> str:
     """SVG ``d`` attribute for a polyline through ``points``.
 

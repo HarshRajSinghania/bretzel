@@ -103,6 +103,13 @@ class TestDropzoneContract:
                 Dropzone(name="a", locked=True).render()
             )
 
+    def test_terminal_marks_an_action_target_only_when_requested(self) -> None:
+        with render_isolated():
+            assert "data-bz-terminal" not in serialize(Dropzone(name="a").render())
+            assert 'data-bz-terminal="true"' in serialize(
+                Dropzone(name="archive", terminal=True).render()
+            )
+
     def test_carrier_is_unconditional_but_its_name_is_not(self) -> None:
         """Les deux moitiés d'un même arbitrage, donc un seul rendu.
 

@@ -268,7 +268,7 @@ def test_a_refused_move_snaps_back(base_url: str) -> None:
 
         page.wait_for_timeout(1500)
         assert posts, "the refused drop fired no server action"
-        assert bodies and "refus serveur" in bodies[0].lower(), (
+        assert bodies and "server refusal" in bodies[0].lower(), (
             "the handler did not take the refusal branch — the Move it "
             "received did not carry the zones it needed to decide"
         )

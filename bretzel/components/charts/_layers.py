@@ -130,8 +130,6 @@ def render_axis_layer(
     slot: Callable[..., str],
     ticks: list[float],
     y_scale: Callable[[float], float],
-    plot_left: float,
-    plot_right: float,
     axis_font: int,
     show_axis: bool,
     show_gridlines: bool,
@@ -152,6 +150,10 @@ def render_axis_layer(
 
     (BarChart carried a copy identical to the character, modulo that
     class name and the line break — audit F10.)
+
+    The svg is the plot (cf. :func:`plot_svg`): the axis sits at ``x=0``,
+    the gridlines run to ``100%``, the labels end 6 px left of the axis,
+    in the margin :func:`~._svg.axis_margin` sized for them.
     """
     gridline_cls = slot("gridline")
     axis_cls = slot("axis")
@@ -160,7 +162,7 @@ def render_axis_layer(
     if show_axis:
         children.append(Element(tag="line", attrs={
             "class": axis_cls,
-            "x1": _fmt(plot_left), "x2": _fmt(plot_left),
+            "x1": "0", "x2": "0",
             "y1": _fmt(y_scale(ticks[0])),
             "y2": _fmt(y_scale(ticks[-1])),
         }, children=()))
@@ -169,19 +171,73 @@ def render_axis_layer(
         if show_gridlines:
             children.append(Element(tag="line", attrs={
                 "class": gridline_cls,
-                "x1": _fmt(plot_left), "x2": _fmt(plot_right),
+                "x1": "0", "x2": "100%",
                 "y1": _fmt(ty), "y2": _fmt(ty),
             }, children=()))
         if show_axis:
             children.append(Element(tag="text", attrs={
                 "class": label_cls,
-                "x": _fmt(plot_left - 6), "y": _fmt(ty),
+                "x": "-6", "y": _fmt(ty),
                 "font-size": str(axis_font),
                 "text-anchor": "end",
                 "dominant-baseline": "middle",
             }, children=(TextNode(format_value(tick, y_format, y_unit)),)))
     return Element(tag="g", attrs={"class": group_class},
                    children=tuple(children))
+
+
+#: Room right of the plot: half of the last x label, the end of a
+#: reference label.
+PLOT_MARGIN_RIGHT = 12
+
+
+def plot_svg(
+    slot: Callable[..., str],
+    children: Sequence[Element],
+    *,
+    height: int,
+    margin_left: int,
+    aria_label: str,
+) -> Element:
+    """The ``<svg>`` of a series chart — which IS its plot rectangle.
+
+    It fills the wrapper less its two margins, and every horizontal
+    coordinate inside is a percentage of it (:func:`~._svg._pct`): the
+    chart takes the width of its container, whatever the server could
+    not know about it. The margins are therefore CSS, not coordinates;
+    what sits in them (the y labels, the last x label's half) is drawn
+    at negative or beyond-100 % positions, which the slot's
+    ``overflow-visible`` shows.
+
+    No ``viewBox``, on purpose: it fixed the aspect ratio, so a wide card
+    letterboxed the drawing — measured, a bar chart 518 px wide centred
+    in a 938-px card. Physical ``margin-left`` and not
+    ``margin-inline-start``: the drawing's coordinates are left-to-right
+    whatever the document's direction, so its margin is too.
+    """
+    return Element(tag="svg", attrs={
+        "class": slot("svg"),
+        "height": str(height),
+        "style": (
+            f"width:calc(100% - {margin_left + PLOT_MARGIN_RIGHT}px);"
+            f"margin-left:{margin_left}px"
+        ),
+        "role": "img",
+        "aria-label": aria_label,
+    }, children=tuple(children))
+
+
+def apply_fixed_width(wrapper_attrs: dict[str, Any], width: int | None) -> None:
+    """``width=N``: the chart is N pixels wide, never wider than its
+    container. Without it, it fills the container.
+
+    Written BEFORE the author's own ``style=`` so that one still wins.
+    """
+    if not width:
+        return
+    fixed = f"width:{int(width)}px;max-width:100%"
+    existing = wrapper_attrs.get("style")
+    wrapper_attrs["style"] = f"{fixed};{existing}" if existing else fixed
 
 
 def render_static_legend(
@@ -212,6 +268,9 @@ def render_static_legend(
 
 
 __all__ = [
+    "PLOT_MARGIN_RIGHT",
+    "apply_fixed_width",
+    "plot_svg",
     "render_axis_layer",
     "render_empty_state",
     "render_static_legend",

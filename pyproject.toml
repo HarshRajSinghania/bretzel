@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bretzel"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Server-Driven UI for Python — typed state, zero npm, batteries included."
 readme = "README.md"
 requires-python = ">=3.12"

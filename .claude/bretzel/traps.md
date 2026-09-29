@@ -37,6 +37,16 @@ Une mesure du DOM ou une valeur dérivée copiée dans un littéral `bz-data` es
 figée au montage. Garder une méthode dans le scope ou recalculer depuis l'effet
 qui dépend des signaux concernés.
 
+### Une config serveur se re-sème aussi quand la valeur est liée
+
+`absorb` ne réécrit jamais un signal existant : une donnée que le serveur
+change (options, bornes, nombre de pages) n'atteint un scope vivant que si
+`_serverSync` la nomme. Lier la VALEUR à un `ClientState` ne change pas le
+propriétaire de la CONFIG. `ui.select` et `ui.combobox` liés oubliaient
+`_options` / `_labels` : l'option ajoutée par un refresh s'affichait, se
+cliquait, et le déclencheur restait sur le placeholder. `scope_literal`
+re-sème `config=` dans les deux modes.
+
 ### Les identités doivent survivre aux rendus partiels
 
 Un `bz-id` calculé uniquement depuis la position courante change lorsqu'un
@@ -49,6 +59,30 @@ Le morph peut remplacer les enfants gérés par un custom element. Le composant
 doit définir explicitement ce qui est préservé et réinitialiser son état après
 swap. Une écriture DOM transitoire ne doit pas être stockée dans un attribut
 que le rendu serveur possède.
+
+### Un état local de boucle se lie à une POSITION
+
+Sans `key=`, le `bz-id` d'un élément répété est sa position. Un signal de
+scope client (le `open` d'un dismiss, un dépliage) passe donc à l'élément
+qui prend la place après un re-rendu. Quand le serveur reçoit le geste
+(un `on_close` serveur), la clé est re-semée (`_serverSync`) et le rendu
+fait foi ; pour un état purement local, une `key=` métier reste
+obligatoire.
+
+### Aucune valeur d'attribut ne contourne l'échappement
+
+Une expression cliente porte des littéraux, et `then_else` écrit des `"`.
+Émise sans échappement, elle referme l'attribut et le runtime lève sur
+l'expression tronquée : le scan de TOUTE la page s'arrête. Émettre une
+`str` ordinaire — `RawAttrValue` a été supprimé le 2026-09-29, gaté par
+`test_a_client_expression_survives_its_attribute`.
+
+### Un attribut de lien ne vit que sur un lien
+
+`href` / `target` / `rel` / `download` sont admis en kwargs bruts (pour
+`tag="a"`), mais posés sur un `<button>` ou un `<div>` ils ne font rien.
+Le rendu lève depuis le 2026-09-29 ; un composant qui doit naviguer prend
+`href=` en paramètre (`ui.button`, `ui.icon_button`, `ui.link`, `ui.card`).
 
 ## État
 
@@ -69,6 +103,18 @@ fournis par l'état Bretzel.
 
 Un validator qui ne retourne rien remplace le champ par `None`. Tester le
 retour et le type après coercition.
+
+### Une navigation repart d'une page neuve, un GET du framework non
+
+Le pont joint `X-Bretzel-Page-ID` à TOUTE requête htmx, lien boosté
+compris. Le serveur l'ignore donc sur une navigation (GET hors
+`/_bretzel/`, `render_context._is_navigation`) et renvoie le nouvel id
+dans le même en-tête ; le pont l'adopte (`05_bridge.js`, `afterRequest`).
+Sans l'adoption, la page affichée est neuve mais l'action suivante
+retrouve l'état de la page quittée. Un GET du framework (refetch, export)
+parle, lui, pour la page qui l'envoie : ne jamais le compter comme une
+navigation. Gates : `tests/integration/server/test_a_navigation_starts_a_fresh_page.py`
+et son pendant `tests/runtime_js/`.
 
 ### Un défaut serveur doit être déterministe
 
@@ -121,10 +167,45 @@ surcharge prévu, et les thèmes ne doivent pas empiler deux valeurs concurrente
 Une classe formée par concaténation ou f-string n'est pas forcément vue par le
 scanner. Utiliser des littéraux complets ou la safelist produite par le thème.
 
+### Le cache `style.css` ne voit que ce que sa marche parcourt
+
+La clé inclut l'empreinte des fichiers balayés : une classe écrite seulement
+sous un dossier élagué (caché, venv, `build/`, `dist/`, `archive/` racine) ne
+recompile rien. Une racine `@source` nichée sous un dossier élagué — le paquet
+installé dans le `.venv` de l'app — reste une racine à part entière, sinon les
+thèmes du framework sortent de la clé.
+
 ### Les icônes se dimensionnent par `font-size`
 
 `iconify-icon` peint un glyphe en `1em`. Les classes `text-*` fixent donc sa
 taille ; `w-*` et `h-*` ne suffisent pas.
+
+### Un texte sans taille hérite, et le navigateur dit 16 px
+
+`ui.text` et `ui.link` n'écrivent aucune classe de taille par défaut, un
+conteneur nu non plus : leur texte hérite. `<body>` porte `text-base` pour
+que ce soit le palier médian du thème (14 px), pas les 16 px du navigateur.
+Une coque qui ne passe pas par `render/shell.py` doit le reposer, et une app
+qui voit tout « un cran trop gros » ne compense pas avec `size="sm"`
+partout : elle regarde d'abord ce qu'hérite le texte nu.
+
+### Une boîte en crans autour d'un texte en paliers
+
+Les crans (`w-9`, `w-64`) suivent `--spacing` ; les paliers `text-*` non.
+Une largeur écrite en crans pour contenir du texte déborde dès que la
+densité se resserre (calendrier à 2,4 px : « LUN.MAR. » collés), et un
+CADRE écrit en crans rétrécit avec les contrôles (sidebar à 192 px au lieu
+de 256). Le texte fixe le plancher (`min-w-fit`, `min-w-max`) ; un cadre
+s'écrit en `rem` (gate `test_a_frame_width_is_not_a_density_step`) ; un
+écart en `px` calé pour 4 px par cran se réécrit en demi-cran (switch).
+
+### SVG étiré : `pathLength` + `non-scaling-stroke` rend la ligne en pointillés
+
+Dans un `<svg preserveAspectRatio="none">` étiré, un trait
+`vector-effect: non-scaling-stroke` avec `pathLength="1"` et
+`stroke-dasharray: 1` : Chromium calcule le tiret sur la longueur non
+étirée et dessine sur la longueur étirée — la ligne finie sort en tirets.
+Pour révéler un tracé étiré, découper (`clip-path`), pas jouer des tirets.
 
 ### Un overlay hérite des contraintes de ses ancêtres
 
@@ -172,17 +253,65 @@ backend ou avec le verrou prévu par l'état.
 
 Utiliser `with TestClient(app) as client:` lorsque le test dépend des routes,
 du broker ou des ressources initialisées au démarrage.
+Passer l'objet `Bretzel`, pas `app.fastapi` : sans le middleware de Bretzel,
+la page lève « No render context is active ».
+
+### Une lecture par requête ne vit pas au niveau module
+
+`Language()`, `Screen()` et tout ce qui les lit (le `tr(en, fr)` des apps
+bilingues) rendent la valeur de LA REQUÊTE. Évalués une seule fois — une
+constante de module, un corps de classe, `@page(title=…)`, un défaut
+d'argument — ils ne voient aucune requête : repli silencieux sur la langue
+par défaut, pour tout le monde. Un `lru_cache` fait pire : il fige la valeur
+du premier visiteur. Une table traduite est une fonction appelée au rendu ;
+un titre de page dépendant de la langue s'écrit `ui.title(…)` dans la page.
+Gardé pour `tr()` par `test_a_translation_is_resolved_per_request`, et pour
+`text()` dans un `reactive_prop(default=…)` par
+`test_framework_words_go_through_the_table`.
+
+### Une requête de base ne vit pas au niveau module non plus
+
+Une constante de module qui interroge la base — les choix d'un filtre de
+colonne, typiquement — rend l'IMPORT dépendant du disque : schéma absent sur
+un clone neuf, vues en reconstruction par un autre processus sous
+`pytest -n`, valeurs figées au démarrage. Appeler `init_db()` avant les
+imports ne fait que déplacer la course. La valeur se construit dans une
+fonction appelée au rendu (`columns()` dans
+`examples/atelier/features/tasks.py`).
 
 ### `networkidle` n'arrive pas avec SSE
 
 Une page qui maintient un flux SSE n'atteint pas l'inactivité réseau. Attendre
 un élément ou une condition métier précise dans les probes navigateur.
 
+### Un 502 ferme `EventSource` pour de bon
+
+`EventSource` retente seul un flux coupé, mais une reprise qui reçoit autre
+chose qu'un `200 text/event-stream` — le 502 d'un proxy pendant un redémarrage —
+le ferme définitivement (`readyState === CLOSED`). Le runtime le rouvre lui-même
+avec un délai croissant, puis relit toutes les zones abonnées : le broker ne
+rejoue pas ce qui a été diffusé pendant la coupure (`00_index.js`, `ensureSse`).
+Côté navigateur, la coupure s'affiche en `ERR_HTTP2_PROTOCOL_ERROR` derrière
+Cloudflare ; c'est le redémarrage, pas une erreur de protocole. Gardé par
+`test_the_live_stream_survives_a_502`.
+
 ### Les clés de signature ont des usages séparés
 
 Ne pas signer directement avec `secret_key`. Utiliser les clés dérivées du
 contexte pour les actions, le CSRF et l'authentification. Un test qui construit
 un faux contexte doit fournir les mêmes clés que le pipeline réel.
+
+### Un POST d'action en TestClient re-rend toutes les zones dépendantes
+
+Sans en-tête `X-Bretzel-Zones`, une action re-rend toutes les zones qui
+dépendent de l'état muté, même absentes de la page. Un test qui compte les
+fragments d'une réponse doit poser l'en-tête comme le runtime.
+
+### Git Bash réécrit un argument `/route` en chemin Windows
+
+`py script.py /button` reçoit `C:/Program Files/Git/button` : un filtre de
+routes ne correspond plus à rien et un script de fumée affiche « 0
+erreur » sans avoir rien testé. Préfixer `MSYS_NO_PATHCONV=1`.
 
 ## Où mettre une découverte
 

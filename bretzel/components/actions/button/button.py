@@ -24,8 +24,10 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from bretzel.components.actions._wiring import (
+    anchor_tag,
     apply_loading_disabled,
     build_loading_spinner,
+    finish_anchor,
     loading_leading_children,
 )
 from bretzel.components.actions.button.theme import BUTTON_THEME
@@ -117,27 +119,8 @@ class Button(Component):
         self._label = Component.adopt_slot(label)
         self._external = external
 
-        # ── An href makes this button an ANCHOR ───────────────────────
-        # The tag switches here and not in ``render``: ``self._tag`` is
-        # read by introspection and by the gates, and a component whose
-        # tag only knows itself at render lies to whoever asks it.
-        # An explicit ``tag=`` wins — it is the tier-2 escape hatch, and
-        # the caller who writes it knows what they are doing.
-        if href is not None and "tag" not in kwargs:
-            self._tag = "a"
-        if href is not None and on_click is not None:
-            raise TypeError(
-                "ui.button does not take `href=` AND `on_click=`: they "
-                "are two jobs (navigate / act) on one target, and nothing "
-                "would announce which applies. Choose — or place two "
-                "controls."
-            )
-        if href is not None and type is not None:
-            raise TypeError(
-                "ui.button(href=…) renders an `<a>`, where `type=` names "
-                "the target's MIME type and not a button's nature. Remove "
-                "`type=`."
-            )
+        anchor_tag(self, href=href, on_click=on_click, type=type,
+                   kwargs=kwargs, name="button")
 
         # Build the spinner eagerly here (not in render()) : Spinner's ctor
         # needs a live render context for ID allocation, and render() may run
@@ -154,14 +137,6 @@ class Button(Component):
         attrs = self.emit_attrs()
         self.apply_class_attrs(attrs)
 
-        # ── What no longer makes sense once the tag has changed ───────
-        # ``type`` is declared with ``default="button"``, so it comes out
-        # of ``emit_attrs`` even when nobody asked for it. On an ``<a>``
-        # it names the target's MIME type: leaving it produced
-        # `<a type="button">`, HTML that means nothing and that the
-        # `tag="a"` instructions shipped as is.
-        if self._tag != "button":
-            attrs.pop("type", None)
 
         # Loading forces the rendered ``<button>`` disabled to block double-
         # submits during the async window ; the reactive ``disabled`` prop
@@ -205,21 +180,6 @@ class Button(Component):
         elif not loading and icon_right is not None:
             children.append(icon_right.render())
 
-        if self._tag == "a":
-            # External: a new tab + a neutralised opener. Same writing
-            # as ``ui.link`` — the ``rel`` pair is not cosmetic, it stops
-            # the opened page reaching ``window.opener``.
-            if self._external:
-                attrs.setdefault("target", "_blank")
-                attrs.setdefault("rel", "noopener noreferrer")
-            # Disabled: an ``<a>`` has no ``disabled`` attribute, and
-            # setting it blocks NOTHING. We remove the destination, take
-            # it out of the tab order and say so out loud — exactly what
-            # ``ui.link`` does, whose theme and this one share the
-            # ``aria-disabled:`` selector.
-            if attrs.pop("disabled", None):
-                attrs.pop("href", None)
-                attrs["aria-disabled"] = "true"
-                attrs["tabindex"] = "-1"
+        finish_anchor(self._tag, attrs, external=self._external)
 
         return Element(tag=self._tag, attrs=attrs, children=tuple(children))

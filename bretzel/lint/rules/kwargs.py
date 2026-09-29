@@ -8,18 +8,19 @@ into the DOM as an inert attribute. Measured over ``examples/`` on
 ``<input label="Display name">`` — no label displayed at all.
 
 The base layer now **raises** (cf. ``attrs.py`` § declared escape
-hatch), which makes this rule redundant… at runtime only. It keeps two
-reasons to exist, and they count:
+hatch), which makes this rule redundant… at runtime only. It keeps one
+reason to exist, and it counts: **it sees without executing.** A
+component in a branch never taken, a rarely rendered page, a path behind
+an ``if`` — the base layer will only raise the day somebody goes through
+there. The rule reads the call site, so it sees it straight away.
 
-1. **It sees without executing.** A component in a branch never taken, a
-   rarely rendered page, a path behind an ``if`` — the base layer will
-   only raise the day somebody goes through there. The rule reads the
-   call site, so it sees it straight away.
-2. **It sees what the base layer CANNOT see.** An HTML attribute's
-   validity depends on the rendered tag, which ``split_kwargs`` does not
-   know (``tag=`` is removed beforehand). ``ui.button(href=…)`` without
-   ``tag="a"`` passes the base layer and stays inert; the rule, by
-   contrast, knows the whole call site.
+⚠️ It does NOT judge the anchor family (``href`` / ``target`` / ``rel`` /
+``download``): those are declared raw attributes, legitimate with
+``tag="a"``, and whether they land on a link depends on the rendered
+tag. This docstring claimed the opposite until 2026-09-29, while
+``ui.icon_button(href=…)`` went through it clean. The render refuses it
+now (``component._refuse_stray_anchor_attrs``), gated by
+``test_a_link_attribute_lands_on_a_link``.
 
 The rule is **pure**: it takes a module and the API index, it knows
 neither corpus nor floor (cf. :mod:`bretzel.lint.corpus`).
@@ -29,7 +30,7 @@ from __future__ import annotations
 
 import ast
 
-from bretzel.lint.corpus import Module
+from bretzel.lint.corpus import Module, catalogue, derived
 from bretzel.lint.report import Finding
 
 RULE = "unknown-kwarg"
@@ -67,24 +68,24 @@ def _accepted(ui_name: str) -> frozenset[str] | object | None:
     ``**kwargs``, for no gain since they are not silent. The raw-HTML
     catch-all, by contrast, is a components matter.
     """
-    from bretzel.introspect import (
-        RESERVED_KWARGS,
-        ComponentInfo,
-        describe_ui_symbol,
-        ui_symbol_names,
-    )
+    return derived(f"{RULE}.accepted", _accepted_by_name).get(ui_name)
 
-    if ui_name not in ui_symbol_names():
-        return None
-    info = describe_ui_symbol(ui_name)
-    if not isinstance(info, ComponentInfo):
-        return _NOT_JUDGED
-    return frozenset(
-        {p.name for p in info.params}
-        | set(RESERVED_KWARGS)
-        | set(info.handler_kwargs)
-        | set(info.named_slots)
-    )
+
+def _accepted_by_name() -> dict[str, frozenset[str] | object]:
+    """:func:`_accepted` for every symbol, built once per pass."""
+    from bretzel.introspect import RESERVED_KWARGS, ComponentInfo
+
+    return {
+        name: frozenset(
+            {p.name for p in info.params}
+            | set(RESERVED_KWARGS)
+            | set(info.handler_kwargs)
+            | set(info.named_slots)
+        )
+        if isinstance(info, ComponentInfo)
+        else _NOT_JUDGED
+        for name, info in catalogue().items()
+    }
 
 
 def _is_raw_attr(name: str) -> bool:
@@ -103,7 +104,7 @@ def _is_raw_attr(name: str) -> bool:
 def check(module: Module) -> list[Finding]:
     """The kwargs no component called here reads."""
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -121,7 +122,7 @@ def check(module: Module) -> list[Finding]:
                     path=module.path,
                     line=node.lineno,
                     message=f"`ui.{func.attr}` does not exist.",
-                    hint="`bretzel describe --index` lists the real surface.",
+                    hint="`bretzel describe` lists the real surface.",
                 )
             )
             continue

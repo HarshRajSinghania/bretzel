@@ -44,7 +44,7 @@ from typing import Any, ClassVar
 from bretzel.components.base import Component, reactive_prop
 from bretzel.components.base._wiring import (
     SERVER_ACTION_ATTRS,
-    server_sync_marker,
+    scope_literal,
     theme_context,
 )
 from bretzel.components.inputs.number_input.theme import (
@@ -53,7 +53,6 @@ from bretzel.components.inputs.number_input.theme import (
 from bretzel.components.primitives.icon import Icon
 from bretzel.core.tree import Element, Node
 from bretzel.render import text
-from bretzel.state.scopes.client import ClientBinding
 
 # Action attrs land on the root by default, but must move onto the
 # focusable ``<input>`` (the form-data carrier) so the dispatcher reads
@@ -180,12 +179,9 @@ class NumberInput(Component):
 
         # ── Value binding resolution ────────────────────────────────
         value_binding = self._binding_metadata.get("value")
-        if value_binding is not None:
-            value_expr = value_binding.binding_path()
-            write_in_method = value_expr
-        else:
-            value_expr = "value"
-            write_in_method = "this.value"
+        value_expr = (
+            value_binding.binding_path() if value_binding is not None else "value"
+        )
 
         # ── Event relocation ────────────────────────────────────────
         # The shell wrapper just holds layout — all events live on the
@@ -381,14 +377,31 @@ class NumberInput(Component):
         )
 
         # ── bz-data ─────────────────────────────────────────────────
-        bz_data = self._build_bz_data(
-            value_binding=value_binding,
-            value_expr=value_expr,
-            write=write_in_method,
-            initial_value=initial_value,
-            min_js=min_js,
-            max_js=max_js,
-            step_js=step_js,
+        # The method bodies live ONCE in ``$bz.numberInput.scope``
+        # (``11_number_input.js``). Besides the value, three client
+        # buffers: ``_draft`` (the raw text while typing, so ``"-"`` or
+        # ``"1."`` are not clamped mid-keystroke), ``_focused`` (shows the
+        # draft while typing, the formatted value once blurred) and
+        # ``_carrier`` (the ``<input>``, captured at ``bz-init`` so a
+        # scope method can dispatch ``change``). ⚠️ Never re-seeded:
+        # that would overwrite the typing in progress at every
+        # neighbouring swap. The bounds, on the contrary, are server
+        # config. A bound ``_read`` maps the empty store value to
+        # ``null`` and coerces the rest to a number.
+        bz_data = scope_literal(
+            "$bz.numberInput.scope",
+            cell="value",
+            initial="null" if initial_value is None else json.dumps(float(initial_value)),
+            binding_path=value_expr if value_binding is not None else None,
+            server_synced=self._value_server_backed(),
+            bound_read="v == null || v === '' ? null : Number(v)",
+            fields={
+                "_draft": "''" if initial_value is None else json.dumps(str(initial_value)),
+                "_focused": "false",
+                "_carrier": "null",
+                "_precCache": "undefined",
+            },
+            config={"_min": min_js, "_max": max_js, "_step": step_js},
         )
 
         # ── Root ────────────────────────────────────────────────────
@@ -428,119 +441,6 @@ class NumberInput(Component):
             icon.render(),
             self._resolved_theme().get("slots", {}).get("chevron", ""),
         )
-
-    def _build_bz_data(
-        self,
-        *,
-        value_binding: ClientBinding | None,
-        value_expr: str,
-        write: str,
-        initial_value: float | None,
-        min_js: str,
-        max_js: str,
-        step_js: str,
-    ) -> str:
-        """The bz-data scope.
-
-        Four pieces of state (the count said "three" until 2026-08-01,
-        for the four bullets that follow):
-
-        - **``value``** : the canonical numeric value (or ``null`` ⇄
-          empty). Lives locally (no binding) or in
-          ``$bz.state.<path>`` (binding mode).
-        - **``_draft``** : the raw string in the input box during
-          typing. Lets the user freely type intermediate states
-          (``"-"``, ``"1."``, ``"1.0"``) without immediate clamp.
-        - **``_focused``** : true while the user types. The input's
-          ``bz-attr:value`` shows ``_draft`` while focused, the
-          canonical re-formatted value when blurred.
-        - **``_carrier``** : the ``<input>`` element, captured at
-          ``bz-init`` so ``_emitChange`` (a scope method with no
-          ``$refs`` in reach) can dispatch the synthetic ``change``.
-
-        Commit flow :
-        - ``bz-on:input`` → ``_commitDraft(false)`` parses the draft
-          and, if valid, writes to ``value`` (no clamp yet — let user
-          type ``"15"`` even if max is 10, clamp on blur).
-        - ``bz-on:blur`` → ``_commitDraft(true)`` clamps + snaps to
-          step + emits change.
-        """
-        # The heavy method bodies live ONCE in the runtime factory
-        # ``$bz.numberInput.scope`` (bretzel/runtime/_src/11_number_input.js).
-        # Each instance only emits its state + the ``_read`` / ``_write``
-        # pair that points the shared methods at the right value cell :
-        #
-        # - local mode  → a ``value`` signal field on the scope ;
-        # - binding mode → the ``$bz.state.<path>`` store cell (no local
-        #   ``value`` ; ``_read`` null-coerces empty → null).
-        #
-        # We use ``_read``/``_write`` (small per-instance functions, so
-        # they register as helpers — NOT frozen) rather than a live
-        # ``get value()`` literal, which ``scope.absorb`` would read once
-        # and freeze (cf. traps.md).
-        if initial_value is None:
-            initial_value_js = "null"
-            initial_draft_js = "''"
-        else:
-            initial_value_js = json.dumps(float(initial_value))
-            initial_draft_js = json.dumps(str(initial_value))
-
-        # ``_min`` / ``_max`` / ``_step`` are CONFIG: the server always
-        # owns them, the client never writes them. They must therefore be
-        # re-seeded UNCONDITIONALLY — ``absorb`` never rewrites an
-        # existing signal (``03_scope.js``), so without that a ``min=`` /
-        # ``max=`` / ``step=`` changed server-side stayed frozen at its
-        # first mount's value: the bench moved the control, the component
-        # kept its old bounds. Same root as Pagination's ``_total`` /
-        # ``_maxVisible``.
-        #
-        # ⚠️ Most certainly NOT ``_draft`` / ``_focused`` / ``_precCache``:
-        # these are CLIENT buffers. Re-seeding them would overwrite the
-        # typing in progress at every neighbouring swap — exactly the
-        # damage the guard below avoids for ``value``.
-        config_sync = ["_min", "_max", "_step"]
-
-        if value_binding is None:
-            # ``value`` stays GATED: re-seeded only if the server owns
-            # it (``value=state.field``). For a literal, the bridge would
-            # rewrite the signal at every swap and overwrite the user's
-            # typing.
-            keys = (
-                ["value", *config_sync]
-                if self._value_server_backed()
-                else config_sync
-            )
-            value_field = (
-                f"value: {initial_value_js},"
-                f"{server_sync_marker(*keys, enabled=True)}"
-            )
-            read_write = (
-                "_read() { return this.value; },"
-                "_write(v) { this.value = v; },"
-            )
-        else:
-            # The value as a ClientBinding: the store owns it, nothing
-            # to re-seed for it — but the config stays server-owned.
-            value_field = f"{server_sync_marker(*config_sync, enabled=True).lstrip()}"
-            read_write = (
-                f"_read() {{ const v = {write}; "
-                f"return v == null || v === '' ? null : Number(v); }},"
-                f"_write(v) {{ {write} = v; }},"
-            )
-
-        state = (
-            value_field
-            + read_write
-            + f"_min: {min_js},"
-            + f"_max: {max_js},"
-            + f"_step: {step_js},"
-            + f"_draft: {initial_draft_js},"
-            + "_focused: false,"
-            + "_carrier: null,"
-            + "_precCache: undefined"
-        )
-
-        return "{...$bz.numberInput.scope," + state + "}"
 
 
 __all__ = ["NumberInput"]

@@ -213,6 +213,15 @@ Deux corollaires du même jour, sur le même détecteur :
   au navigateur.
 - **Muter le détecteur lui-même.** Changer la regex fait rougir la gate
   sans rien prouver de la dérive réelle.
+- **Filtrer sur le chemin ABSOLU.** Lancée depuis un worktree, la racine
+  vit elle-même sous `.claude/worktrees/<nom>/` : « le chemin contient
+  `.claude/worktrees/` » y excluait tout le dépôt. Relativiser à la racine
+  d'abord.
+- **Avaler un import.** Un `except Exception: continue` autour d'un
+  `import_module` sort un module du balayage sans un mot ; sous
+  `pytest -n`, si l'échec ne frappe qu'un worker, xdist refuse toute la
+  collecte en désignant des identifiants innocents. Refusé par
+  `test_no_gate_swallows_a_file`.
 
 ---
 

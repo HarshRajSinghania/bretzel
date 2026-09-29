@@ -89,8 +89,13 @@ TABLE_THEME: dict[str, Any] = {
         # ``Datatable.head_button`` copies it so its sortable column
         # aligns with its static neighbour. Changing one without the
         # other breaks that alignment.
+        # No text alignment here: every ``<th>`` gets its column's from
+        # ``aligns`` below. A ``text-start`` in this slot competed with
+        # it at equal specificity and won by sheet order — a column set
+        # ``align="right"`` kept a left-aligned header over right-aligned
+        # figures.
         "head_cell": (
-            "text-start text-sm font-semibold "
+            "text-sm font-semibold "
             "text-text/70 border-b-(length:--bz-stroke) border-text/10 whitespace-nowrap"
         ),
         "body": "",
@@ -120,8 +125,8 @@ TABLE_THEME: dict[str, Any] = {
     # Per-column alignment modifiers — applied on the th + td of the
     # corresponding column.
     "aligns": {
-        "left":   "text-left",
+        "left":   "text-start",
         "center": "text-center",
-        "right":  "text-right",
+        "right":  "text-end",
     },
 }

@@ -209,9 +209,9 @@ def calendar_picker_scope(
       ONLY when the value is server-backed (a pure literal keeps its
       client value).
 
-    Used by :func:`render_calendar_field` for MonthPicker and
-    WeekPicker. DatePicker still builds its scope separately;
-    DateRangePicker carries two variables (``vstart`` / ``vend``).
+    Used by DatePicker and by :func:`render_calendar_field` for
+    MonthPicker and WeekPicker. DateRangePicker carries two variables
+    (``vstart`` / ``vend``), so it keeps its own.
     """
     if component._binding_metadata.get("value") is not None:
         return "{open: false}"

@@ -20,7 +20,6 @@ from collections.abc import Callable, Iterable, Sequence
 from contextlib import contextmanager
 
 from bretzel import ui
-from examples.docs.lib.i18n import tr
 
 from examples.docs.lib.runtime_surface import (
     binding_order,
@@ -76,18 +75,17 @@ def runtime_modules_mirror() -> None:
     facts = bundle_facts()
     with ui.hstack(gap="sm", wrap=True, align="center"):
         ui.badge(f"{facts['modules']} modules", color="info", variant="soft")
-        ui.badge(f"socle : {facts['core_modules']} fichiers, "
-                 f"{facts['core_lines']} lignes", color="primary", variant="soft")
-        ui.badge(f"bundle : {facts['bundle_bytes'] // 1024} Ko",
+        ui.badge(f"core: {facts['core_modules']} files, "
+                 f"{facts['core_lines']} lines", color="primary", variant="soft")
+        ui.badge(f"bundle : {facts['bundle_bytes'] // 1024} KB",
                  color="muted", variant="outline")
 
     grouped_tables(
         describe_runtime_modules(),
         [
-            ui.column("file", label="Fichier"),
-            ui.column("title", label=tr('Role',
-                                        'Rôle')),
-            ui.column("lines", label="Lignes", align="right"),
+            ui.column("file", label="File"),
+            ui.column("title", label='Role'),
+            ui.column("lines", label="Lines", align="right"),
         ],
         lambda m: {"file": m.name, "title": m.title, "lines": str(m.lines)},
     )
@@ -108,50 +106,41 @@ def directives_mirror() -> None:
     if unwired:
         with ui.card(color="error"):
             ui.text(
-                tr('Declared on the Python side, never wired into the '
-                   'runtime: ',
-                   'Déclarée côté Python, jamais branchée dans le runtime : ')
+                ('Declared on the Python side, never wired into the '
+                'runtime: ')
                 + ", ".join(o.name for o in unwired)
-                + tr('. Nothing raises at run time — a half-live directive is'
-                     ' simply ignored by the browser.',
-                     ". Rien ne lève à l'exécution — une directive à moitié "
-                     'vivante est simplement ignorée par le navigateur.'),
+                + ('. Nothing raises at run time — a half-live directive is'
+                  ' simply ignored by the browser.'),
                 size="sm",
             )
 
     grouped_tables(
         ops,
         [
-            ui.column("syntax", label=tr('Written into the HTML',
-                                         'Écrit dans le HTML')),
-            ui.column("doc", label="Ce qu'elle garantit"),
-            ui.column("contract", label=tr('Declared by',
-                                           'Déclarée par')),
+            ui.column("syntax", label='Written into the HTML'),
+            ui.column("doc", label="What it guarantees"),
+            ui.column("contract", label='Declared by'),
         ],
         lambda o: {
             "syntax": o.syntax,
             "doc": o.doc,
             "contract": (f"{o.constant} — {o.protocol_note}"
                          if o.implemented
-                         else f"{o.constant} — ⚠ non branchée"),
+                         else f"{o.constant} — ⚠ not wired"),
         },
     )
 
     order = binding_order()
     if order:
         with ui.vstack(gap="xs"):
-            ui.text(tr('Wiring order on a single element',
-                       'Ordre de câblage sur un même élément'), weight="bold",
+            ui.text('Wiring order on a single element', weight="bold",
                     size="sm")
             ui.text(" → ".join(order), classes="font-mono", size="sm",
                     color="muted")
             ui.text(
-                tr('Read from the engine. It is not cosmetic: bz-ref is wired'
-                   ' first (a neighbour can read it), bz-init last (the node '
-                   'is fully wired when it runs).',
-                   "Lu dans le moteur. Il n'est pas cosmétique : bz-ref est "
-                   'câblé en premier (un voisin peut le lire), bz-init en '
-                   'dernier (le nœud est entièrement câblé quand il tourne).'),
+                'Read from the engine. It is not cosmetic: bz-ref is wired'
+                ' first (a neighbour can read it), bz-init last (the node '
+                'is fully wired when it runs).',
                 color="muted", size="xs",
             )
 
@@ -163,7 +152,7 @@ def magics_mirror() -> None:
         describe_magics(),
         [
             ui.column("name", label="Variable"),
-            ui.column("doc", label="Contenu"),
+            ui.column("doc", label="Contents"),
         ],
         lambda m: {"name": m.name, "doc": m.doc},
     )
@@ -186,12 +175,10 @@ def runtime_api_mirror() -> None:
     grouped_tables(
         public,
         [
-            ui.column("name", label="Nom"),
-            ui.column("doc", label=tr('What it is',
-                                      "Ce que c'est")),
-            ui.column("members", label="Expose"),
-            ui.column("module", label=tr('Defined in',
-                                         'Défini dans')),
+            ui.column("name", label="Name"),
+            ui.column("doc", label='What it is'),
+            ui.column("members", label="Exposes"),
+            ui.column("module", label='Defined in'),
         ],
         lambda o: {
             "name": f"$bz.{o.name}",
@@ -205,21 +192,15 @@ def runtime_api_mirror() -> None:
         with ui.accordion(collapsible=True):
             with ui.accordion_item(
                 "private",
-                label=f"{len(private)} entrées internes (préfixe _)",
+                label=f"{len(private)} internal entries (_ prefix)",
                 icon="lock",
             ):
                 ui.text(
-                    tr('The framework reserves them: they change without '
-                       'notice and no component should call them. Two are '
-                       'exceptions and are invoked from the server-rendered '
-                       'HTML ($bz._resolveIcon, $bz._tick) — the prefix says '
-                       '“the framework writes this”, not “nobody calls it”.',
-                       'Le framework se les réserve : elles changent sans '
-                       'préavis et aucun composant ne doit les appeler. Deux '
-                       'font exception et sont invoquées depuis le HTML rendu'
-                       ' par le serveur ($bz._resolveIcon, $bz._tick) — le '
-                       'préfixe dit « le framework écrit ça », pas « personne'
-                       " ne l'appelle »."),
+                    'The framework reserves them: they change without '
+                    'notice and no component should call them. Two are '
+                    'exceptions and are invoked from the server-rendered '
+                    'HTML ($bz._resolveIcon, $bz._tick) — the prefix says '
+                    '“the framework writes this”, not “nobody calls it”.',
                     color="muted", size="sm",
                 )
                 ui.text(

@@ -109,7 +109,7 @@ class TestStatic:
         )
 
     def test_style_css_placeholder(self) -> None:
-        # Phase 1 ships a placeholder until ``bretzel build`` is wired.
+        # The ``browser`` pipeline (the dev default) serves a placeholder.
         app = Bretzel(secret_key=_SECRET, mode="dev")
         with TestClient(app) as client:
             response = client.get("/_bretzel/style.css")

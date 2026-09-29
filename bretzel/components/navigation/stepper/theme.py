@@ -127,9 +127,9 @@ STEPPER_THEME: dict[str, Any] = {
     },
     "sizes": {
         "xs": {
-            "bullet": "w-6 h-6 text-[10px]",
+            "bullet": "w-6 h-6 text-xs",
             "label": "text-xs",
-            "description": "text-[10px]",
+            "description": "text-xs",
             "icon_size": "xs",
         },
         "sm": {

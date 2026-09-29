@@ -47,6 +47,16 @@ from bretzel.runtime.protocol import (
 )
 from bretzel.state import ClientExpression
 
+#: The rule of a server handler, in the words every reader gets: the
+#: ``describe`` index states it before a first draft, the
+#: ``lambda-handler`` lint rule after one. One sentence, so the two cannot
+#: drift from each other nor from :func:`encode_handler_id`, which applies it.
+SERVER_HANDLER_RULE = (
+    "A server handler — a Python callable given to `on_<event>=` — is a "
+    "module-level function, or `functools.partial(fn, value)` of one; never "
+    "a lambda nor a closure: the framework signs it by its importable name."
+)
+
 
 class HandlerError(TypeError):
     """Raised when a component receives an event handler that the

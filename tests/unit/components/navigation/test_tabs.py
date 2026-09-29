@@ -388,7 +388,7 @@ class TestSingleStyle:
 
     @pytest.mark.parametrize(
         ("size", "expected"),
-        [("sm", "text-xs"), ("md", "text-sm"), ("lg", "text-base")],
+        [("xs", "text-xs"), ("sm", "text-sm"), ("md", "text-sm"), ("lg", "text-base")],
     )
     def test_size_applies_to_tab_buttons(
         self, size: str, expected: str

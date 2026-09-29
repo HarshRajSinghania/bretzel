@@ -79,6 +79,10 @@ _ALLOWED: dict[str, int] = {
     # qu'on lui donne, et un ``tag="ul"`` autour de ``<li>`` pour montrer
     # l'enveloppe qui remplace le parent au lieu de s'y intercaler.
     "examples/playground/features/html.py": 16,
+    # The showcase's ``ui.html`` page: four literals written there (an SVG
+    # logo, ``<kbd>`` shortcuts, a ``<details>``, a ``<meter>``), never a
+    # received value — it shows what the escape hatch is FOR.
+    "examples/showcase/features/components/html.py": 4,
 }
 
 

@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, Any
 from urllib.parse import parse_qsl
 
-from starlette.datastructures import MutableHeaders
+from starlette.datastructures import FormData, MutableHeaders, UploadFile
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -43,6 +43,7 @@ from bretzel.runtime.protocol import (
     HEADER_TAB,
     HEADER_ZONES,
     LANG_COOKIE,
+    ROUTE_PREFIX,
 )
 from bretzel.server.middleware._state import ensure_state, read_header
 from bretzel.server.middleware.csrf import csrf_token_for
@@ -233,7 +234,18 @@ class RenderContextMiddleware:
             texts=cfg.text_tables.for_language(resolved_lang),
         )
 
-        page_id = read_header(scope, HEADER_PAGE_ID) or ctx.page_uuid
+        # A navigation starts a NEW page, and its ``PageState`` fresh
+        # (state.md) — whatever page id came along: the bridge sends the
+        # one of the page being LEFT with every request, a boosted link
+        # included, and the server found the old state again. Measured in
+        # the product's cockpit: « Nouvelle conversation » (/atelier from
+        # /atelier?c=X) kept thread X on screen. The new id goes back in
+        # the response, and the bridge adopts it for the actions to come.
+        navigation = _is_navigation(scope)
+        page_id = (None if navigation else read_header(scope, HEADER_PAGE_ID)) \
+            or ctx.page_uuid
+        if navigation:
+            ctx.response_headers[HEADER_PAGE_ID] = page_id
         url_params = _addressable_params(scope)
 
         backend = getattr(self._bretzel_app, "_state_backend", None)
@@ -341,7 +353,7 @@ async def _collect_form(
     request = Request(scope, _replay_receive(buffered))
     try:
         raw_form = await request.form(max_part_size=_MAX_PART_BYTES)
-        return {k: raw_form[k] for k in raw_form}, replay, None, buffered
+        return _form_dict(raw_form), replay, None, buffered
     except Exception as exc:
         # ⚠️ This ``except`` returned an EMPTY form and said nothing.
         # The handler then ran on blank fields and wrote them to the
@@ -356,6 +368,24 @@ async def _collect_form(
             f"the multipart form could not be read: {exc}",
             buffered,
         )
+
+
+def _form_dict(raw_form: FormData) -> dict[str, Any]:
+    """The multipart form as a dict — a name sent with SEVERAL files keeps
+    them all, as a list.
+
+    A dict holds one value per name, the last. Right for a field, whose
+    repeat is a duplicate; wrong for ``<input type="file" multiple>``,
+    which sends one part per file under ONE name: the handler received
+    the last file only, and the others vanished without a word. Files
+    only — a repeated text field stays last-wins, as in the urlencoded
+    branch.
+    """
+    form: dict[str, Any] = {}
+    for name in raw_form:
+        files = [v for v in raw_form.getlist(name) if isinstance(v, UploadFile)]
+        form[name] = files if len(files) > 1 else raw_form[name]
+    return form
 
 
 #: The ceiling on one multipart part. 32 MB: high enough that a text
@@ -459,6 +489,16 @@ def _apply_ctx_cookies_and_headers(ctx: RenderContext, message: Message) -> None
         for k, v in dummy.raw_headers:
             if k == b"set-cookie":
                 headers.append("set-cookie", v.decode("latin-1"))
+
+
+def _is_navigation(scope: Scope) -> bool:
+    """A GET for a page, boosted or not — the start of a page.
+
+    The framework's own GETs (``/_bretzel/…``: a zone refetch, an export)
+    are NOT one: they speak for the page that asked, and keep its state.
+    """
+    return (scope.get("method", "GET").upper() == "GET"
+            and not str(scope.get("path", "")).startswith(ROUTE_PREFIX))
 
 
 def _addressable_params(scope: Scope) -> dict[str, str]:

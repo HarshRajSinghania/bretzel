@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from bretzel.components import _UI
+from bretzel.components.base import is_size_keyed
 from bretzel.components.base.component import Component
 from bretzel.components.base.testing import render_isolated
 from bretzel.core.serialize import serialize
@@ -55,7 +56,7 @@ def tailwind_corpus() -> str:
     parts: list[str] = []
     for pattern in ("bretzel/**/*.py", "examples/**/*.py", "bretzel/**/*.js"):
         for path in REPO_ROOT.glob(pattern):
-            if "__pycache__" in str(path) or "archive" in str(path):
+            if {"__pycache__", "archive"} & set(path.relative_to(REPO_ROOT).parts):
                 continue
             parts.append(path.read_text(encoding="utf8", errors="replace"))
     with TestClient(app):
@@ -615,6 +616,50 @@ def code_string_literals(tree: ast.AST) -> Iterator[ast.Constant]:
         stack.extend(ast.iter_child_nodes(node))
 
 
+# ── Lecture des ``except`` — partagée par les deux gates anti-avalement
+# (``test_no_gate_swallows_a_file`` / ``_a_component``). Recopiées dans
+# chacune, la règle « corps muet » aurait dérivé d'une copie à l'autre.
+
+
+def except_names(handler: ast.ExceptHandler) -> set[str]:
+    """Les exceptions qu'un ``except`` rattrape — ``except:`` nu compris."""
+    node = handler.type
+    if node is None:
+        return {"BaseException"}
+    if isinstance(node, ast.Name):
+        return {node.id}
+    if isinstance(node, ast.Tuple):
+        return {e.id for e in node.elts if isinstance(e, ast.Name)}
+    if isinstance(node, ast.Attribute):
+        return {node.attr}
+    return set()
+
+
+def called_names(node: ast.AST) -> set[str]:
+    """Les noms appelés dans un sous-arbre — ``ast.parse`` → ``parse``."""
+    out: set[str] = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Call):
+            name = getattr(sub.func, "attr", None) or getattr(sub.func, "id", None)
+            if name:
+                out.add(name)
+    return out
+
+
+def is_silent_handler(handler: ast.ExceptHandler) -> bool:
+    """Le corps se contente-t-il de passer au suivant ?"""
+    body = handler.body
+    if len(body) != 1:
+        return False
+    if isinstance(body[0], (ast.Continue, ast.Pass)):
+        return True
+    return (
+        isinstance(body[0], ast.Return)
+        and isinstance(body[0].value, ast.Constant)
+        and body[0].value.value is None
+    )
+
+
 def source_of(path: Path) -> ParsedSource:
     """Le fichier LU ET PARSÉ, pris dans le balayage mémoïsé de sa racine.
 
@@ -681,3 +726,20 @@ def parsed_sources(root: Path, *, floor: int) -> list[ParsedSource]:
         f"gate d'interdiction passe."
     )
     return list(sources)
+
+
+def scaled_slots(sizes: dict) -> set[str]:
+    """Les slots qu'une table ``sizes`` alimente réellement, sous ses deux
+    imbrications (``sizes[size][slot]`` ou ``sizes[slot][size]``) ou plate
+    (``{"root"}``). Un seul lecteur : deux gates qui recomptaient chacune
+    à sa façon finissaient par ne plus trancher pareil."""
+    if not is_size_keyed(sizes):
+        return set(sizes)                       # sizes[slot][size]
+    values = list(sizes.values())
+    if all(isinstance(v, str) for v in values):
+        return {"root"}                         # plate -> composeur de base
+    scaled: set[str] = set()
+    for value in values:                        # sizes[size][slot]
+        if isinstance(value, dict):
+            scaled |= set(value)
+    return scaled

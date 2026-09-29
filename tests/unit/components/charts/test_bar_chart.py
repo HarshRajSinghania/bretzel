@@ -7,7 +7,6 @@ from bretzel.components.charts.bar_chart.bar_chart import BarChart
 from bretzel.components.charts.series import Series
 from bretzel.core.serialize import serialize
 
-
 SAMPLE = [("Jan", 12), ("Feb", 18), ("Mar", 7), ("Apr", 21), ("May", 15)]
 
 
@@ -167,11 +166,11 @@ class TestBarChart:
         ]
         with render_isolated():
             out = serialize(BarChart(series).render())
-        # Default palette starts at primary → success → warning.
+        # Default palette: the brand pair, then info.
         assert "fill-(--bz-solid)" in out
         assert "bz-c-primary" in out
-        assert "bz-c-success" in out
-        assert "bz-c-warning" in out
+        assert "bz-c-secondary" in out
+        assert "bz-c-info" in out
 
     def test_negative_values_anchor_at_zero(self) -> None:
         with render_isolated():

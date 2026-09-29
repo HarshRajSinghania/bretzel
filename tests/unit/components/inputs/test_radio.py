@@ -334,3 +334,26 @@ class TestImperativeAPI:
         assert not hasattr(rg, "clear")
         assert not hasattr(rg, "focus")
         assert not hasattr(rg, "blur")
+
+
+class TestAnUnnamedGroupStillExcludes:
+    """Unbound and unnamed, a group's radios came out with no ``name`` at
+    all — so they did not exclude each other (two ticked, measured)."""
+
+    def test_every_radio_shares_one_name(self) -> None:
+        with render_isolated():
+            with RadioGroup() as rg:
+                Radio("standard", label="Standard")
+                Radio("express", label="Express")
+            out = serialize(rg.render())
+        names = re.findall(r'<input[^>]*type="radio"[^>]*name="([^"]+)"', out)
+        assert len(names) == 2 and len(set(names)) == 1
+        # Plumbing, never a field the app named.
+        assert names[0].startswith("_")
+
+    def test_an_explicit_name_still_wins(self) -> None:
+        with render_isolated():
+            with RadioGroup(name="shipping") as rg:
+                Radio("standard", label="Standard")
+            out = serialize(rg.render())
+        assert 'name="shipping"' in out

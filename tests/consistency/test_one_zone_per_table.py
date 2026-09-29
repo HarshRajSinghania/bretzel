@@ -50,16 +50,21 @@ _EXAMPLES = pathlib.Path(__file__).resolve().parents[2] / "examples"
 
 
 def _zones() -> list[tuple[str, int, str, list[str]]]:
-    """``(fichier, ligne, nom, états de table surveillés)`` par zone."""
+    """``(fichier, ligne, nom, états de table surveillés)`` par zone.
+
+    ⚠️ Un module qui ne s'importe pas est REMONTÉ, pas sauté : sauté, il
+    sort ses zones du balayage sans un mot, et sous ``pytest -n`` un échec
+    propre à un worker fait diverger la collecte (cf. ``gates.md``).
+    """
     out: list[tuple[str, int, str, list[str]]] = []
+    unimportable: list[str] = []
     for source in parsed_sources(_EXAMPLES, floor=EXAMPLES_FLOOR):
         path, tree = source.path, source.tree
-        module = None
-        dotted = path.relative_to(_EXAMPLES.parent).with_suffix("")
+        dotted = ".".join(path.relative_to(_EXAMPLES.parent).with_suffix("").parts)
         try:
-            module = importlib.import_module(str(dotted).replace("\\", ".")
-                                             .replace("/", "."))
-        except Exception:
+            module = importlib.import_module(dotted)
+        except Exception as exc:
+            unimportable.append(f"{dotted} — {type(exc).__name__}: {exc}")
             continue
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -83,6 +88,10 @@ def _zones() -> list[tuple[str, int, str, list[str]]]:
                                 and issubclass(obj, DatatableState)):
                             tables.append(elt.id)
                     out.append((str(path), node.lineno, node.name, tables))
+    assert not unimportable, (
+        "Ces modules d'exemple ne s'importent pas, donc leurs zones "
+        "sortiraient du balayage :\n  " + "\n  ".join(unimportable)
+    )
     return out
 
 

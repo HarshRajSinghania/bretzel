@@ -29,8 +29,7 @@ import sys
 
 from bretzel import page, ui
 
-from examples.docs.features.shell import NAV, localized_nav_label, shell
-from examples.docs.lib.i18n import tr
+from examples.docs.features.shell import NAV, shell
 
 
 def routes_livrees() -> frozenset[str]:
@@ -70,10 +69,10 @@ def stub_body(title: str, blurb: str) -> None:
         with ui.vstack(gap="lg", align="center", justify="center",
                        classes="min-h-[60vh] text-center"):
             ui.icon("hard-hat", size="xl", color="muted")
-            ui.heading(localized_nav_label(title), level=1, size="2xl")
+            ui.heading(title, level=1, size="2xl")
             ui.text(blurb, color="muted", size="lg")
-            ui.badge(tr("Coming next", "Prochaine tranche"), color="warning", variant="soft")
-            ui.link(tr("← Back to home", "← Retour à l'accueil"), href="/")
+            ui.badge("Coming next", color="warning", variant="soft")
+            ui.link("← Back to home", href="/")
 
 
 def make(title: str, blurb: str):
@@ -89,7 +88,7 @@ for _section, _items in NAV:
         if _path in _LIVREES or _path.startswith("http"):
             continue
         _slug = _path.strip("/").replace("-", "_") or "root"
-        _fn = make(_label, _blurb or tr("Coming soon.", "Bientôt."))
+        _fn = make(_label, _blurb or "Coming soon.")
         _fn.__name__ = f"stub_{_slug}"
         _fn.__qualname__ = _fn.__name__
         globals()[_fn.__name__] = page(_path, layout=shell, title=_label)(_fn)

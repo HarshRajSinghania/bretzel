@@ -13,7 +13,6 @@ from bretzel import page, ui
 from bretzel.state import ClientState, field
 from examples.docs.features.shell import shell
 from examples.docs.lib.blocks import client_algebra_mirror
-from examples.docs.lib.i18n import tr
 
 PATH = "/reactivity-client"
 
@@ -29,12 +28,10 @@ class NumberUI(ClientState, persist="memory"):
 def toggle_demo() -> None:
     panel = PanelUI()
     with ui.vstack(gap="sm"):
-        ui.button("Afficher / masquer", on_click=panel.open.toggle())
+        ui.button("Show / hide", on_click=panel.open.toggle())
         with ui.card(color="primary", visible=panel.open):
-            ui.text(tr('I show myself through `visible=binding` — bz-show, '
-                       'zero round trips.',
-                       "Je m'affiche via `visible=binding` — bz-show, zéro "
-                       'aller-retour.'))
+            ui.text('I show myself through `visible=binding` — bz-show, '
+                    'zero round trips.')
 
 
 def number_demo() -> None:
@@ -46,128 +43,90 @@ def number_demo() -> None:
         ui.badge("n > 3", color="success", visible=(num.n > 3))
 
 
-@page(PATH, layout=shell, title=tr('Client reactivity',
-                                   'Réactivité client'))
+@page(PATH, layout=shell, title='Client reactivity')
 def reactivity_client_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):
-            ui.heading(tr('Client reactivity',
-                          'Réactivité client'), level=1, size="3xl")
+            ui.heading('Client reactivity', level=1, size="3xl")
             with ui.hstack(align="baseline", gap="sm", wrap=True):
                 ui.text(
-                    tr('When a',
-                       'Quand un'),
+                    'When a',
                     color="muted", size="lg",
                 )
-                ui.link(tr('client state',
-                           'état client'), href="/state-client")
+                ui.link('client state', href="/state-client")
                 ui.text(
-                    tr('changes, the browser updates the display itself — '
-                       'with no request. One wires that by passing a binding '
-                       'to a reactive prop.',
-                       "change, le navigateur met à jour l'affichage lui-même"
-                       ' — sans requête. On câble ça en passant un binding à '
-                       'une prop réactive.'),
+                    'changes, the browser updates the display itself — '
+                    'with no request. One wires that by passing a binding '
+                    'to a reactive prop.',
                     color="muted", size="lg",
                 )
 
             with ui.card():
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('Reading a client state = a binding',
-                                  'Lire un état client = un binding'), level=2)
+                    ui.heading('Reading a client state = a binding', level=2)
                     ui.text(
-                        tr('Reading a ClientState field inside a render does '
-                           'not return the raw value but a `ClientBinding` — '
-                           'an object the component knows how to wire.',
-                           "Lire un champ d'un ClientState dans un render ne "
-                           'renvoie pas la valeur brute mais un '
-                           '`ClientBinding` — un objet que le composant sait '
-                           'câbler.'),
+                        'Reading a ClientState field inside a render does '
+                        'not return the raw value but a `ClientBinding` — '
+                        'an object the component knows how to wire.',
                         color="muted", size="sm",
                     )
                     ui.table(
                         columns=[
-                            ui.column("prop", label=tr('Passed to…',
-                                                       'Passé à…')),
-                            ui.column("effet", label=tr('Cable',
-                                                        'Câble')),
+                            ui.column("prop", label='Passed to…'),
+                            ui.column("effet", label='Cable'),
                         ],
                         rows=[
                             {"prop": "ui.text(binding)",
-                             "effet": tr('bz-text — the text follows the value',
-                                         'bz-text — le texte suit la valeur')},
+                             "effet": 'bz-text — the text follows the value'},
                             {"prop": "visible=binding",
-                             "effet": tr('bz-show — shown/hidden according to'
-                                         ' the value',
-                                         'bz-show — affiché/masqué selon la '
-                                         'valeur')},
+                             "effet": 'bz-show — shown/hidden according to'
+                                      ' the value'},
                             {"prop": "value=binding (input)",
-                             "effet": tr('bz-model — two-way read/write',
-                                         'bz-model — lecture/écriture two-way')},
+                             "effet": 'bz-model — two-way read/write'},
                         ],
                         size="sm",
                     )
 
             with ui.card():
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('Displaying a value',
-                                  'Afficher une valeur'), level=2)
+                    ui.heading('Displaying a value', level=2)
                     ui.text(
-                        tr('A server value read inside a render is an '
-                           'ordinary Python value: one displays it directly '
-                           '(str, f-string). A ClientBinding is passed as is '
-                           'to `ui.text()` to stay reactive; interpolating it'
-                           ' into a `str()` or an f-string raises an error.',
-                           'Une valeur serveur lue dans un render est une '
-                           "valeur Python normale : on l'affiche directement "
-                           '(str, f-string). Un ClientBinding se passe tel '
-                           'quel à `ui.text()` pour rester réactif ; '
-                           "l'interpoler dans un `str()` ou une f-string lève"
-                           ' une erreur.'),
+                        'A server value read inside a render is an '
+                        'ordinary Python value: one displays it directly '
+                        '(str, f-string). A ClientBinding is passed as is '
+                        'to `ui.text()` to stay reactive; interpolating it'
+                        ' into a `str()` or an f-string raises an error.',
                         color="muted", size="sm",
                     )
 
             with ui.card():
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('Demo — a binding drives a bz-show',
-                                  'Démo — un binding pilote un bz-show'), level=2)
+                    ui.heading('Demo — a binding drives a bz-show', level=2)
                     toggle_demo()
 
             with ui.card():
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('Demo — a ClientExpression drives visible=',
-                                  'Démo — une ClientExpression pilote visible='),
+                    ui.heading('Demo — a ClientExpression drives visible=',
                                level=2)
                     ui.text(
-                        tr('The operators on a binding (`num.n > 3`) compose '
-                           'a `ClientExpression`, baked into a client-side '
-                           '`bz-show`. Zero round trips.',
-                           'Les opérateurs sur un binding (`num.n > 3`) '
-                           'composent une `ClientExpression`, bakée en `bz-'
-                           'show` côté client. Zéro aller-retour.'),
+                        'The operators on a binding (`num.n > 3`) compose '
+                        'a `ClientExpression`, baked into a client-side '
+                        '`bz-show`. Zero round trips.',
                         color="muted", size="sm",
                     )
                     number_demo()
 
             with ui.card():
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('The whole binding → JS algebra',
-                                  "Toute l'algèbre binding → JS"), level=2)
+                    ui.heading('The whole binding → JS algebra', level=2)
                     ui.text(
-                        tr('Every `ClientBinding` operator and method, read '
-                           'live from the class, with the JS it really emits '
-                           '(captured by running a probe). Adding an operator'
-                           ' to the algebra adds it here — with no editing. '
-                           'Traps: `&`/`|`/`~` (not `and`/`or`/`not`), and '
-                           'parenthesise compound comparisons `(x > 0) & (y <'
-                           ' 10)`.',
-                           'Chaque opérateur et méthode de `ClientBinding`, '
-                           "lu en direct sur la classe, avec le JS qu'il émet"
-                           ' réellement (capturé en exécutant une sonde). '
-                           "Ajouter un opérateur à l'algèbre l'ajoute ici — "
-                           'sans édition. Pièges : `&`/`|`/`~` (pas '
-                           '`and`/`or`/`not`), et parenthéser les '
-                           'comparaisons composées `(x > 0) & (y < 10)`.'),
+                        'Every `ClientBinding` operator and method, read '
+                        'live from the class, with the JS it really emits '
+                        '(captured by running a probe). Adding an operator'
+                        ' to the algebra adds it here — with no editing. '
+                        'Traps: `&`/`|`/`~` (not `and`/`or`/`not`), and '
+                        'parenthesise compound comparisons `(x > 0) & (y <'
+                        ' 10)`.',
                         color="muted", size="sm",
                     )
                     client_algebra_mirror()

@@ -195,10 +195,11 @@ DEFAULT_TEXT: Final[dict[str, str]] = {
 #: component's ``size=`` says ``md``, and it is the component that
 #: translates.
 #:
-#: ⚠️ The line below the step stays out of reach: 39 theme strings write
-#: a literal size (``text-[10px]``, ``h-[1.75rem]``). Moving the base
-#: does not move them — that is the "``size=`` does not reach every slot"
-#: debt in ``todo.md``, not a hole in this parameter.
+#: ⚠️ A literal size is out of reach of this parameter — moving the base
+#: does not move ``text-[10px]``. There were 31 in the component themes,
+#: all gone to ``text-xs`` on 2026-09-27; ``test_a_text_size_is_a_step``
+#: refuses the next one. The page's own inherited size is the median step
+#: too: ``<body>`` carries ``text-base`` (``render/shell.py``).
 TEXT_SLOT_NAMES: Final[tuple[str, ...]] = (
     "xs",
     "sm",

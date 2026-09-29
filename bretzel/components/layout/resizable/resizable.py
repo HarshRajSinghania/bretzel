@@ -107,7 +107,7 @@ from bretzel.components.base import Component, reactive_prop
 from bretzel.components.base._wiring import (
     hidden_carrier_attrs,
     pop_change_handler,
-    server_sync_marker,
+    scope_literal,
     unwrap_transparent,
 )
 from bretzel.components.base.attrs import ComponentUsageError
@@ -547,16 +547,32 @@ class Resizable(Component):
             self.slot_class("vertical" if vertical else "horizontal"),
             gap_class,
         )
-        root_attrs["bz-data"] = self._build_bz_data(
-            scope_key=scope_key,
-            has_local_value=sizes_binding is None,
-            weights=weights,
-            mins=mins,
-            maxs=maxs,
-            foldable=foldable,
+        # The methods (geometry, gesture, keyboard, imperative) live once
+        # in ``$bz.resizable.scope``. ``_mins`` / ``_maxs`` / ``_foldable``
+        # travel as data rather than being re-read from the DOM on every
+        # frame of the gesture; the server owns them, so a refresh that
+        # moves a bound re-seeds them (``config=``). ``_folded`` starts
+        # empty and lives on the
+        # client — "what size did this panel have before we put it away"
+        # means nothing to the server. ``_group`` is filled by the
+        # ``bz-init`` below: a scope method has no ``$el``.
+        root_attrs["bz-data"] = scope_literal(
+            "$bz.resizable.scope",
+            cell=scope_key,
+            initial=_num_list(weights),
             binding_path=binding_path,
             server_synced=self._value_server_backed("sizes"),
-            vertical=vertical,
+            config={
+                "_mins": _num_list(mins),
+                "_maxs": _num_list(maxs),
+                "_foldable": json.dumps(foldable),
+                "_vertical": json.dumps(vertical),
+            },
+            fields={
+                "_folded": "{}",
+                "_group": "null",
+                "_drag": "null",
+            },
         )
         # A scope method has no ``$el`` — it is here, in directive
         # context, that we capture the group into the scope.
@@ -643,63 +659,6 @@ class Resizable(Component):
             children=(),
         )
         return Element(tag="div", attrs=attrs, children=(grip,))
-
-    @staticmethod
-    def _build_bz_data(
-        *,
-        scope_key: str,
-        has_local_value: bool,
-        weights: list[float],
-        mins: list[float],
-        maxs: list[float],
-        foldable: list[bool],
-        binding_path: str | None,
-        server_synced: bool,
-        vertical: bool,
-    ) -> str:
-        """The instance's ``bz-data``: **data, not code**.
-
-        The methods (geometry, gesture, keyboard, imperative) live once
-        in ``$bz.resizable.scope``.
-
-        ``_group`` is declared ``null`` then filled by the root's
-        ``bz-init``: a scope method has no access to ``$el``, only
-        directives do (same constraint and same remedy as Slider and
-        Carousel).
-
-        ``_mins`` / ``_maxs`` / ``_foldable`` travel as data rather than
-        being re-read from the DOM: they are design constraints, they
-        only change on a re-render, and writing them on each panel would
-        force the runtime to re-parse them on every frame of the gesture.
-
-        ``_folded`` starts empty and lives on the client: it is the
-        memory of "what size did this panel have before we put it away".
-        It has no meaning on the server, which does not know what the
-        user collapsed three seconds ago.
-        """
-        if has_local_value:
-            sync = server_sync_marker(scope_key, enabled=server_synced)
-            state = f"{scope_key}: {_num_list(weights)},{sync} "
-            target = f"this.{scope_key}"
-        else:
-            assert binding_path is not None
-            state = ""
-            target = binding_path
-
-        return (
-            "{...$bz.resizable.scope,"
-            + state
-            + f"_mins: {_num_list(mins)},"
-            + f"_maxs: {_num_list(maxs)},"
-            + f"_foldable: {json.dumps(foldable)},"
-            + "_folded: {},"
-            + f"_vertical: {json.dumps(vertical)},"
-            + "_group: null,"
-            + "_drag: null,"
-            + f"_read() {{ return {target}; }},"
-            + f"_write(v) {{ {target} = v; }}"
-            + "}"
-        )
 
 
 __all__ = ["Resizable", "ResizablePanel", "normalize_weights"]

@@ -195,8 +195,9 @@ def build_patch(
             patches[instance_key(state)] = full_field_dict(state)
             # The seed is the ONLY case where the client can discover
             # an instance it has never seen — so the only one that must
-            # carry its config. An ordinary action response speaks of
-            # instances already configured at boot.
+            # carry its config. A push speaks of instances the runtime
+            # already holds: an action response seeds the unseen ones
+            # apart (``render/partials._render_delta``).
             config[instance_key(state)] = _transport_config(state)
         elif state._dirty:
             patches[instance_key(state)] = state.to_dict()

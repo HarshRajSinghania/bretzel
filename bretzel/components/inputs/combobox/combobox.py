@@ -125,7 +125,7 @@ from bretzel.components.base._wiring import (
     imperative_listeners,
     install_open_close_toggle,
     retrigger,
-    server_sync_marker,
+    scope_literal,
     shrink_fit_wrapper,
     theme_context,
     trigger_asks_full_width,
@@ -400,12 +400,10 @@ class Combobox(Component):
         #   ``window`` instead of touching ``this.value``. Cf.
         #   ``traps.md`` § "open = false in a shorthand method of a
         #   ``bz-data`` scope".
-        if value_binding is not None:
-            value_expr = self.path_of(value_binding)
-            value_method = value_expr  # full path works in both surfaces
-        else:
-            value_expr = "value"        # directive context
-            value_method = "this.value"  # method shorthand context
+        # ``"value"`` bare: a directive context.
+        value_expr = (
+            self.path_of(value_binding) if value_binding is not None else "value"
+        )
 
         # ── Resolve event relocations ───────────────────────────────
         # change → hidden input, focus/blur → inner input.
@@ -551,13 +549,25 @@ class Combobox(Component):
             hidden_nodes.append(query_hidden)
 
         # ── bz-data : state + filter + pick helpers ─────────────────
-        bz_data = self._build_bz_data(
-            is_multi=is_multi,
-            value_binding=value_binding,
-            value_method=value_method,
-            initial_value=initial_value,
-            options_js=options_js,
-            server_backed=value_server_backed,
+        # The ~30 normalise / filter / nav / pick methods live ONCE in
+        # ``14_combobox.js``: a shared ``$bz.combobox.common`` (filter +
+        # nav) plus the mode's ``.single`` / ``.multi``. The instance
+        # emits its data; ``_options`` (each entry carries its label and
+        # its pre-normalised haystack) is server config, re-seeded so a
+        # list reloaded at every refresh does not stay frozen. A bound
+        # ``_read`` null-guards so the factory's ``_value()`` gets
+        # ``[]`` / ``''`` instead of ``null``.
+        empty_js = "[]" if is_multi else "''"
+        bz_data = scope_literal(
+            "$bz.combobox.common",
+            "$bz.combobox.multi" if is_multi else "$bz.combobox.single",
+            cell="value",
+            initial=json.dumps(initial_value),
+            binding_path=value_expr if value_binding is not None else None,
+            server_synced=value_server_backed,
+            bound_read=f"v == null ? {empty_js} : v",
+            fields={"open": "false", "query": "''", "_highlight": "-1"},
+            config={"_options": options_js},
         )
 
         # ── Trigger : pills (multi only) + input + clear + chevron ──
@@ -1136,112 +1146,6 @@ class Combobox(Component):
             select_all_disabled_js=(
                 "((c) => c > 0 && _picked().length === c)(_visibleCount())"
             ),
-        )
-
-    def _build_bz_data(
-        self,
-        *,
-        is_multi: bool,
-        value_binding: ClientBinding | None,
-        value_method: str,
-        initial_value: Any,
-        options_js: str,
-        server_backed: bool,
-    ) -> str:
-        """The big bz-data blob — single source of truth for the
-        Combobox's runtime behaviour. Assembled by ``json.dumps`` +
-        f-strings + concatenation. (The ``%``-formatting announced here
-        until 2026-08-01 is used nowhere in this file — zero ``%s``.)
-
-        Two read shapes (mirrors Select / Tabs / Accordion idiom) :
-
-        - **Local mode** : a local ``value`` field. ``_setValue``
-          writes ``this.value`` directly.
-        - **Binding mode** : no local field, ``_value()`` reads
-          ``$bz.state.<path>``. Writes go to the same path.
-
-        ⚠️ ``value`` is exposed as a flat ``_value()`` method, not a
-        getter (a getter would freeze at registration via
-        ``scope.absorb``). All read sites call ``_value()`` /
-        ``_picked()``.
-
-        Methods exposed :
-
-        - ``_norm(s)`` — JS-side equivalent of :func:`_normalise_text`.
-        - ``_tokens()`` — split + normalise the current ``query``.
-        - ``_matches(haystack)`` — true iff every token is in the
-          pre-normalised haystack.
-        - ``_visibleCount()`` / ``_visibleIndices()`` — filter stats
-          used by arrow-key navigation to skip filtered-out rows.
-        - ``_moveHighlight(delta)`` — bounded keyboard nav.
-        - ``_pickHighlighted()`` — Enter handler.
-        - Single :  ``_pick(v)`` — write the value, close the panel.
-        - Multi :   ``_picked()`` returns the current array (handles
-          the binding/local split), ``_togglePick(v)`` flips
-          membership, ``_removeOne(v)`` / ``_removeLast()`` remove,
-          ``_selectAll()`` / ``_clearAll()``.
-        - ``_isPicked(v)`` / ``_hasPicked()`` — selection predicates.
-        - ``_setValue(raw)`` — used by the imperative ``bz-set``
-          dispatch. Accepts a string (single) or array (multi).
-        - ``_value()`` — mode-aware reader (local field or binding
-          path, null-guarded).
-
-        Pick / set methods only ``_write`` the value ; ``change`` is
-        dispatched by the hidden input's ``_change_emit_effect``, not by
-        the scope.
-        """
-        # The ~30 normalise/filter/nav + pick/membership methods live
-        # ONCE in the runtime factory (14_combobox.js) : a shared
-        # ``$bz.combobox.common`` (filter + nav) + a mode-specific
-        # ``.single`` / ``.multi``. Each instance spreads both and emits
-        # only its data (``_options``, per-instance) +
-        # ``_read``/``_write`` pointing at the value cell.
-        #
-        # ``_read``/``_write`` (helpers, not frozen) : local → a ``value``
-        # field, binding → ``$bz.state.<path>`` (read raw + null-guard so
-        # the factory's ``_value`` gets [] / '' instead of null). No live
-        # ``get value()`` — scope.absorb freezes getters (cf. traps.md) ;
-        # the input/hidden read ``value_expr`` directly.
-        initial_js = (
-            json.dumps([str(v) for v in initial_value])
-            if is_multi
-            else json.dumps(str(initial_value or ""))
-        )
-
-        if value_binding is None:
-            # ``_serverSync`` adopts ``value`` from the server on a
-            # @refreshable swap — ONLY when server-backed (cf. render() ;
-            # an unbound / literal combobox keeps its client pick).
-            # The options list is server-owned CONFIG: the client never
-            # writes it, and it does change for real (a select reloaded
-            # from the database at every refresh). Re-seeded
-            # UNCONDITIONALLY — otherwise it stays frozen at the first
-            # mount's, for life. The VALUE, for its part, stays gated.
-            _keys = (["value", "_options"] if server_backed
-                     else ["_options"])
-            sync_marker = server_sync_marker(*_keys, enabled=True)
-            value_field = "value: " + initial_js + "," + sync_marker
-            read_write = (
-                "_read() { return this.value; },"
-                "_write(v) { this.value = v; },"
-            )
-        else:
-            empty_js = "[]" if is_multi else "''"
-            value_field = ""
-            read_write = (
-                f"_read() {{ const v = {value_method}; "
-                f"return v == null ? {empty_js} : v; }},"
-                f"_write(v) {{ {value_method} = v; }},"
-            )
-
-        scope = "multi" if is_multi else "single"
-        return (
-            "{...$bz.combobox.common, ...$bz.combobox." + scope + ","
-            + value_field
-            + read_write
-            + "open: false, query: '', _highlight: -1,"
-            + f"_options: {options_js}"
-            + "}"
         )
 
 

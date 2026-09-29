@@ -30,6 +30,8 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterator
 
+from bretzel.lint.corpus import Module
+
 #: The name a theme is built under. Recognised as a NAME, called
 #: directly (``Theme(...)``) or through an attribute
 #: (``bretzel.Theme(...)``): a static rule does not resolve imports, and
@@ -82,14 +84,14 @@ def components_arg(call: ast.Call) -> ast.expr | None:
     return None
 
 
-def component_maps(tree: ast.Module) -> Iterator[ast.expr]:
-    """Every ``components={…}`` of this tree's ``Theme(...)``.
+def component_maps(module: Module) -> Iterator[ast.expr]:
+    """Every ``components={…}`` of this module's ``Theme(...)``.
 
     A module may carry several — one theme per screen, a test theme
     beside the real one. Returning them all rather than the first is what
     keeps a rule from judging on half a file.
     """
-    for node in ast.walk(tree):
+    for node in module.nodes:
         if isinstance(node, ast.Call):
             components = components_arg(node)
             if components is not None:

@@ -102,13 +102,13 @@ async def render_page(
         # on the full-doc branch below.
         title = ctx.head_title or meta.title or "Bretzel"
         # Push a small ``HX-Trigger`` so the client can update its
-        # ``<title>`` (the partial response doesn't touch <head>).
+        # ``<title>`` (the partial response doesn't touch <head>) — the
+        # helper an action's re-rendered zone uses too, which MERGES
+        # with a trigger the page already set instead of replacing it.
+        from bretzel.render.partials import _render_delta, push_title
+
+        push_title(ctx, title)
         headers = dict(ctx.response_headers)
-        try:
-            import json as _json
-            headers["HX-Trigger"] = _json.dumps({"bretzel:title": title})
-        except Exception:
-            pass
         # First-time partial nav : the runtime has never seen the
         # ClientStates this page references. Without seeding them via
         # un ``<bz-patch>``, ``bz-*`` bindings like ``$bz.state.X.default.f``
@@ -116,7 +116,6 @@ async def render_page(
         # ``_render_delta`` helper builds the script tag for us ;
         # ``include_unchanged=True`` widens the filter from dirty-only
         # (action flow) to every-registered (partial-nav flow).
-        from bretzel.render.partials import _render_delta
         body_html = _render_delta(ctx, include_unchanged=True) + body_html
         return RenderResult(
             body=body_html,

@@ -28,8 +28,10 @@ from typing import Any
 
 SCATTER_CHART_THEME: dict[str, Any] = {
     "slots": {
-        "wrapper":      "relative flex flex-col gap-3 w-fit max-w-full",
-        "svg":          "block max-w-full overflow-visible",
+        # Fills its container: the plot is drawn in percentages of it
+        # (``_svg.PLOT_SPAN``) — same reason as LineChart's wrapper.
+        "wrapper":      "relative flex flex-col gap-3 w-full min-w-0",
+        "svg":          "block overflow-visible",
         # ``cursor-pointer`` because every dot is a hover target ; the
         # hover makes the point SOLID, and that is the only way to do it
         # here.
@@ -57,7 +59,12 @@ SCATTER_CHART_THEME: dict[str, Any] = {
         "axis_label":   "fill-text/60",
         "gridline":     "stroke-text/10",
         "reference_line":  "stroke-(--bz-solid)/60",
-        "reference_label": "fill-(--bz-solid)/80 font-medium",
+        # Painted OVER the dots: a halo in the page colour keeps it
+        # readable, and it gives the hover back to the dots beneath.
+        "reference_label": (
+            "fill-(--bz-solid)/80 font-medium pointer-events-none "
+            "stroke-background stroke-3 [paint-order:stroke]"
+        ),
         "legend":       "flex flex-wrap items-center justify-center gap-x-4 gap-y-1",
         "legend_item": (
             "flex items-center gap-2 cursor-pointer "
@@ -77,5 +84,18 @@ SCATTER_CHART_THEME: dict[str, Any] = {
         "lg": {"h": 360, "dot": 4.5, "axis": 13},
         "xl": {"h": 440, "dot": 5.0, "axis": 14},
     },
-    "palette": ("primary", "success", "warning", "info", "error", "muted"),
+    # The auto-cycle when a series carries no ``color=``. BRAND colours
+    # first, then status colours, ``error`` last. The identity's author
+    # chose ``primary`` and ``secondary`` as a pair, so they are the two
+    # the framework can trust to differ; a status colour is only
+    # guaranteed to differ from the OTHER status colours
+    # (``test_palette_distinctness``), not from an arbitrary primary. The
+    # old cycle went primary → success, so under a green identity the
+    # first two series came out the same green. ``info`` next, the only
+    # status colour that says nothing; ``error`` last, since a series in
+    # red reads as an alarm.
+    "palette": (
+        "primary", "secondary", "info", "success", "warning", "error",
+        "muted",
+    ),
 }

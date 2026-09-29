@@ -68,13 +68,12 @@ from bretzel.components.base._wiring import (
     bool_attr,
     hidden_carrier_attrs,
     relocate_server_action,
-    server_sync_marker,
+    scope_literal,
     theme_context,
 )
 from bretzel.components.inputs.slider.theme import SLIDER_THEME
 from bretzel.core.tree import Element, Node
 from bretzel.render import text
-from bretzel.state.scopes.client import ClientBinding
 
 # Native HTMX action attrs a callable handler lands on the root via
 # ``emit_attrs`` ; relocated wholesale to the carrier that holds
@@ -212,12 +211,9 @@ class Slider(Component):
 
         # ── Value binding resolution ────────────────────────────────
         value_binding = self._binding_metadata.get("value")
-        if value_binding is not None:
-            value_expr = value_binding.binding_path()
-            write_in_method = value_expr  # full path works anywhere
-        else:
-            value_expr = "value"
-            write_in_method = "this.value"
+        value_expr = (
+            value_binding.binding_path() if value_binding is not None else "value"
+        )
 
         # ── Event relocation ────────────────────────────────────────
         # change → hidden input (form-data dispatcher reads name+value)
@@ -302,17 +298,40 @@ class Slider(Component):
             )
 
         # ── bz-data : range or scalar ───────────────────────────────
-        bz_data = self._build_bz_data(
-            is_range=is_range,
-            value_binding=value_binding,
-            value_expr=value_expr,
-            write=write_in_method,
-            initial_value=initial_value,
-            min_v=min_v,
-            max_v=max_v,
-            step_v=step_v,
-            server_backed=value_server_backed,
-            disabled_js=disabled_js,
+        # The ~15 drag / keyboard / pointer / clamp methods live ONCE in
+        # ``$bz.slider.scope`` (``12_slider.js``); they branch on
+        # ``_range``. The bounds are server config — a ``min=`` changed
+        # server-side must not stay frozen at its first mount's value.
+        # ⚠️ ``_dragging`` / ``_hovered`` / ``_focused`` / ``_track`` /
+        # ``_carrier`` / ``_precCache`` are CLIENT interaction state:
+        # re-seeding them would cut a drag in progress. ``disabled`` is
+        # a METHOD override (``_disabledState``), re-read on every
+        # gesture — a field would freeze a bound lock at mount.
+        bz_data = scope_literal(
+            "$bz.slider.scope",
+            cell="value",
+            initial=json.dumps(initial_value),
+            binding_path=value_expr if value_binding is not None else None,
+            server_synced=value_server_backed,
+            methods=(
+                [f"_disabledState() {{ return {disabled_js}; }}"]
+                if disabled_js is not None
+                else []
+            ),
+            fields={
+                "_dragging": "null",
+                "_hovered": "null",
+                "_focused": "null",
+                "_track": "null",
+                "_carrier": "null",
+                "_precCache": "undefined",
+            },
+            config={
+                "_range": "true" if is_range else "false",
+                "_min": json.dumps(min_v),
+                "_max": json.dumps(max_v),
+                "_step": json.dumps(step_v),
+            },
         )
 
         # ── Track + fill + handles ──────────────────────────────────
@@ -577,119 +596,6 @@ class Slider(Component):
         )
 
         return Element(tag="div", attrs=attrs, children=(tooltip,))
-
-    def _build_bz_data(
-        self,
-        *,
-        is_range: bool,
-        value_binding: ClientBinding | None,
-        value_expr: str,
-        write: str,
-        initial_value: Any,
-        min_v: float,
-        max_v: float,
-        step_v: float,
-        server_backed: bool,
-        disabled_js: str | None,
-    ) -> str:
-        """The bz-data scope.
-
-        Two read shapes :
-        - **Local mode** (no binding) : ``value`` field carries the
-          scalar (single) or ``[start, end]`` array (range).
-        - **Binding mode** : ``_read()`` / ``_write()`` read and write
-          ``$bz.state.<path>``. ⚠️ NOT a ``get value()`` — the comment
-          25 lines below explains precisely that ``scope.absorb`` freezes
-          getters (this line announced the opposite until 2026-08-01).
-
-        Methods (mode-aware) :
-        - ``_picked()`` → scalar (single) or ``[start, end]`` (range)
-        - ``_pct(v)`` → percentage along the track ([0..100])
-        - ``_clamp(v)`` → snap to step + clamp to bounds
-        - ``_setHandle(target, raw)`` → write one handle's value
-          (target = "value" single, "start" / "end" range). Range
-          clamps start ≤ end via swap.
-        - ``_setValue(raw)`` → external imperative API entry point
-          (accepts scalar or array, splits as needed)
-        - ``_startDrag / _drag / _endDrag`` → pointer flow
-        - ``_jumpToPointer`` → click-on-track snap
-        - ``_nudge(target, delta)`` → keyboard step
-        - ``_emitChange()`` → dispatch change event from the captured
-          carrier (``this._carrier``, no ``$refs`` in a scope method)
-        - ``_disabledState()`` → reads reactive disabled if any
-        """
-        # The ~15 drag/keyboard/pointer/clamp methods live ONCE in the
-        # runtime factory ``$bz.slider.scope`` (bretzel/runtime/_src/
-        # 12_slider.js). Each instance emits only its state + ``_read``/
-        # ``_write`` (value access) + a ``_range`` flag ; the factory's
-        # mode-specific methods branch on ``this._range``.
-        #
-        # ``_read``/``_write`` (helpers, not frozen) point the shared
-        # methods at the value cell : local mode → a ``value`` field,
-        # binding mode → ``$bz.state.<path>`` (read raw ; ``_picked``
-        # handles the null → [min,max] / min fallback). No live
-        # ``get value()`` literal — ``scope.absorb`` freezes getters
-        # (cf. traps.md). The hidden input reads ``value_expr`` directly.
-        if is_range:
-            initial_js = json.dumps(list(initial_value))
-        else:
-            initial_js = json.dumps(float(initial_value))
-
-        # The CONFIG is server-owned: the client never writes it, so it
-        # re-seeds unconditionally. ``absorb`` never rewrites an existing
-        # signal (``03_scope.js``) — without these keys, a ``min=`` /
-        # ``max=`` / ``step=`` changed server-side stayed frozen at its
-        # first mount's value. Same root as Pagination's ``_total`` and
-        # NumberInput's ``_step``.
-        #
-        # ⚠️ NOT ``_dragging`` / ``_hovered`` / ``_focused`` / ``_track``
-        # / ``_carrier`` / ``_precCache``: CLIENT interaction state.
-        # Re-seeding them would cut a drag in progress.
-        config_sync = ["_range", "_min", "_max", "_step"]
-
-        if value_binding is None:
-            # ``value`` stays GATED: re-seeded only if the server owns
-            # it — a literal slider keeps the position the client has
-            # just dragged it to.
-            keys = ["value", *config_sync] if server_backed else config_sync
-            sync_marker = server_sync_marker(*keys, enabled=True)
-            value_field = f"value: {initial_js},{sync_marker}"
-            read_write = (
-                "_read() { return this.value; },"
-                "_write(v) { this.value = v; },"
-            )
-        else:
-            # A client store owns the value; the config stays with the
-            # server.
-            value_field = server_sync_marker(
-                *config_sync, enabled=True
-            ).lstrip()
-            read_write = (
-                f"_read() {{ return {write}; }},"
-                f"_write(v) {{ {write} = v; }},"
-            )
-
-        # Override the factory's constant ``_disabledState() {return false}``
-        # with the live state (static ``true`` or a binding read) so the
-        # pointer / keyboard / imperative guards bail when disabled.
-        disabled_override = (
-            f"_disabledState() {{ return {disabled_js}; }},"
-            if disabled_js is not None else ""
-        )
-        state = (
-            value_field
-            + read_write
-            + disabled_override
-            + f"_range: {'true' if is_range else 'false'},"
-            + f"_min: {json.dumps(min_v)},"
-            + f"_max: {json.dumps(max_v)},"
-            + f"_step: {json.dumps(step_v)},"
-            + "_dragging: null, _hovered: null, _focused: null,"
-            + "_track: null, _carrier: null,"
-            + "_precCache: undefined"
-        )
-
-        return "{...$bz.slider.scope," + state + "}"
 
 
 __all__ = ["Slider"]

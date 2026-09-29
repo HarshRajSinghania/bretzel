@@ -23,9 +23,7 @@ from bretzel.state import (
     PageState,
     field,
 )
-
 from examples.playground.features.inspection import emitted_html_block
-
 
 PATH = "/meta"
 
@@ -81,7 +79,7 @@ def meta_tag_changed(state: MetaTagPlayground) -> None:
 def title_panel() -> None:
     state = TitlePlayground()
     # ⚠️ Side effect : changing the text below ACTUALLY updates the
-    # browser tab title (partial-nav refresh flips the HX-Trigger
+    # browser tab title (the zone's re-render sends the HX-Trigger
     # ``bretzel:title``). Watch the tab while you type.
     ui.title(state.text)
 
@@ -248,7 +246,7 @@ def page() -> None:
                     ui.heading("Live playground", level=3)
                     ui.text(
                         "Type below — the browser tab updates "
-                        "(partial-nav refresh flips ``bretzel:title``).",
+                        "(the zone's re-render sends ``bretzel:title``).",
                         color="muted", size="xs",
                     )
                     title_panel()

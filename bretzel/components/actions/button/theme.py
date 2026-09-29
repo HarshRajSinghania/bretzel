@@ -116,7 +116,7 @@ BUTTON_THEME: dict[str, Any] = {
         "sm": "h-8 px-3 text-sm gap-1.5",
         "md": "h-10 px-4 text-sm gap-2",
         "lg": "h-12 px-6 text-base gap-2",
-        "xl": "h-14 px-8 text-base gap-2.5",
+        "xl": "h-14 px-8 text-lg gap-2.5",
     },
     # No ``modifiers`` map — the disabled visual lives at the root slot via
     # the ``disabled:`` Tailwind variant, reactive through the HTML attribute.

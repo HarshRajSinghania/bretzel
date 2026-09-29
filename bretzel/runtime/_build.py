@@ -31,6 +31,7 @@ from bretzel.runtime.protocol import (  # noqa: E402
     PROTOCOL_VERSION,
     ROUTE_ACTION,
     SCREEN_SYNC_FN,
+    TITLE_EVENT,
 )
 
 _TOKENS = {
@@ -40,6 +41,7 @@ _TOKENS = {
     "__SCREEN_SYNC_FN__": SCREEN_SYNC_FN,
     "__ROUTE_ACTION__": ROUTE_ACTION,
     "__NAV_PENDING_KEY__": NAV_PENDING_KEY,
+    "__TITLE_EVENT__": TITLE_EVENT,
 }
 
 

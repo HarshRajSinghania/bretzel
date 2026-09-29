@@ -63,7 +63,7 @@ RADIO_THEME: dict[str, Any] = {
     # Per-size dict : circle, dot, label all scale together so the
     # visual proportions stay tight.
     "sizes": {
-        "xs": {"circle": "h-3 w-3", "dot": "h-1.5 w-1.5", "label": "text-[10px]"},
+        "xs": {"circle": "h-3 w-3", "dot": "h-1.5 w-1.5", "label": "text-xs"},
         "sm": {"circle": "h-4 w-4", "dot": "h-2 w-2",     "label": "text-xs"},
         "md": {"circle": "h-5 w-5", "dot": "h-2.5 w-2.5", "label": "text-sm"},
         "lg": {"circle": "h-6 w-6", "dot": "h-3 w-3",     "label": "text-base"},

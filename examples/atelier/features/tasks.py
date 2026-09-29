@@ -13,7 +13,7 @@ Three means starting over; ten, using the test suite as a compiler.
 from __future__ import annotations
 
 from bretzel import Feature, page, refreshable, ui
-from bretzel.components import DatatableState
+from bretzel.components import Column, DatatableState
 from bretzel.state import field
 from examples.atelier.core.era import MILESTONE_LABEL, MILESTONE_WHY
 from examples.atelier.core.phases import (
@@ -171,24 +171,33 @@ def errors_cell(value, _row):
     return ui.badge(str(value), color="error", variant="soft", size="xs")
 
 
-#: ⚠️ Eight columns fitted badly in 1 136 px: Verdict and Strip went off
-#: the screen. `Errors` is gone — the verdict already SUMS it up
-#: ("corrected" means there were some), so it paid a column to repeat
-#: another. The strip, for its part, is what one comes to read: it
-#: stays.
-COLUMNS = [
-    ui.column("started", label="Start", sortable=True, render=started_cell),
-    ui.column("scope", label="Scope", sortable=True,
-              filter=known_scopes(), render=scope_cell),
-    ui.column("request", label="Request", render=request_cell),
-    ui.column("minutes", label="Minutes", sortable=True, align="right"),
-    ui.column("calls", label="Calls", sortable=True, align="right"),
-    ui.column("cycles", label="Cycles", sortable=True, align="right",
-              render=cycles_cell),
-    ui.column("verdict", label="Verdict", sortable=True,
-              filter=list(VERDICTS), render=verdict_cell),
-    ui.column("strip", label="Strip", render=strip_cell),
-]
+def columns() -> list[Column]:
+    """The table's columns, built at render time.
+
+    ⚠️ A function, not a module constant: the scope filter QUERIES the
+    database, and importing a module must not. At import time the schema
+    may not exist yet, another process may be rebuilding the views, and
+    the scopes would stay frozen as they were at startup.
+
+    ⚠️ Eight columns fitted badly in 1 136 px: Verdict and Strip went off
+    the screen. `Errors` is gone — the verdict already SUMS it up
+    ("corrected" means there were some), so it paid a column to repeat
+    another. The strip, for its part, is what one comes to read: it
+    stays.
+    """
+    return [
+        ui.column("started", label="Start", sortable=True, render=started_cell),
+        ui.column("scope", label="Scope", sortable=True,
+                  filter=known_scopes(), render=scope_cell),
+        ui.column("request", label="Request", render=request_cell),
+        ui.column("minutes", label="Minutes", sortable=True, align="right"),
+        ui.column("calls", label="Calls", sortable=True, align="right"),
+        ui.column("cycles", label="Cycles", sortable=True, align="right",
+                  render=cycles_cell),
+        ui.column("verdict", label="Verdict", sortable=True,
+                  filter=list(VERDICTS), render=verdict_cell),
+        ui.column("strip", label="Strip", render=strip_cell),
+    ]
 
 
 def kpi(label: str, value: str, help_: str = "") -> None:
@@ -286,7 +295,7 @@ def table() -> None:
     """
     ui.datatable(
                 state=TasksTable,
-                columns=COLUMNS,
+                columns=columns(),
                 rows=load_tasks,
                 search=True,
                 search_placeholder="Search the requests…",

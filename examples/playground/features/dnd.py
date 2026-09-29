@@ -89,6 +89,7 @@ class Locked(PageState):
 
     kept: list = field(default_factory=lambda: ["Ne sort jamais"])
     free: list = field(default_factory=lambda: ["Peut partir"])
+    trashed: int = field(default=0)
 
 
 class Preview(PageState):
@@ -205,6 +206,14 @@ def move_locked(m: Move) -> None:
     columns = {"kept": list(state.kept), "free": list(state.free)}
     if apply_move(columns, m):
         state.kept, state.free = columns["kept"], columns["free"]
+
+
+def trash_card(m: Move) -> None:
+    """A terminal zone: the Move names it, the card never lands in it."""
+    state = Locked()
+    if m.item_key in state.free:
+        state.free = [label for label in state.free if label != m.item_key]
+        state.trashed += 1
 
 
 def server_changed(state: DndPlayground) -> None:
@@ -437,7 +446,7 @@ def composability() -> None:
 @refreshable(deps=[Locked])
 def edge_cases() -> None:
     state = Locked()
-    with ui.grid(cols=2, gap="md"):
+    with ui.grid(cols=3, gap="md"):
         with ui.vstack(gap="sm"):
             ui.heading("locked=True — rien ne sort", level=4)
             with ui.dropzone(name="kept", accepts=["any"], locked=True,
@@ -452,6 +461,16 @@ def edge_cases() -> None:
                 with ui.vstack(gap="sm"):
                     for label in ui.drag_each(state.free, group="any"):
                         card(label)
+        with ui.vstack(gap="sm"):
+            ui.heading("terminal=True — an action, not a column", level=4)
+            with ui.dropzone(name="trash", accepts=["any"], locked=True,
+                             terminal=True, color="error",
+                             on_move=trash_card,
+                             classes="h-14 flex items-center justify-center "
+                                     "rounded-lg border border-dashed "
+                                     "border-text/20"):
+                ui.text(f"Trash — {state.trashed} deleted",
+                        size="sm", color="muted")
 
 
 @refreshable(deps=[Preview])

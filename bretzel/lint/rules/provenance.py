@@ -85,7 +85,7 @@ from __future__ import annotations
 
 import ast
 
-from bretzel.lint.corpus import Module
+from bretzel.lint.corpus import Module, catalogue
 from bretzel.lint.report import Finding
 
 RULE = "state-lost-by-a-cast"
@@ -102,11 +102,9 @@ def _two_way(ui_name: str) -> frozenset[str]:
     ``reactive_prop(writes=True)``, so a prop that becomes bidirectional
     between here and the base layer cannot leave the rule silently.
     """
-    from bretzel.introspect import ComponentInfo, describe_ui_symbol, ui_symbol_names
+    from bretzel.introspect import ComponentInfo
 
-    if ui_name not in ui_symbol_names():
-        return frozenset()
-    info = describe_ui_symbol(ui_name)
+    info = catalogue().get(ui_name)
     if not isinstance(info, ComponentInfo):
         return frozenset()
     return frozenset(info.two_way)
@@ -183,7 +181,7 @@ def stripping_expr(value: ast.expr) -> tuple[str, str] | None:
 def check(module: Module) -> list[Finding]:
     """The casts set on a two-way prop."""
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         if not isinstance(node, ast.Call):
             continue
         func = node.func

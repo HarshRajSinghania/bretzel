@@ -33,7 +33,6 @@ from bretzel.introspect import CAPABILITIES, Capability
 from bretzel.state import ClientState, field
 
 from examples.docs.features.shell import shell
-from examples.docs.lib.i18n import tr
 
 PATH = "/capabilities"
 
@@ -77,7 +76,7 @@ def carte(cap: Capability) -> None:
             ui.text(cap.does, color="muted", size="sm")
 
             with ui.hstack(gap="xs", wrap=True, align="center"):
-                ui.text("On entre par", size="xs", color="muted")
+                ui.text("Entry points", size="xs", color="muted")
                 for chemin in cap.entry:
                     ui.badge(chemin, color="primary", variant="soft",
                              size="sm")
@@ -88,66 +87,53 @@ def carte(cap: Capability) -> None:
             # nothing more to know.
             with ui.hstack(gap="xs", wrap=True, align="baseline"):
                 if cap.chapter:
-                    ui.text(tr('The chapter that teaches it:',
-                               "Le chapitre qui l'enseigne :"), size="xs",
+                    ui.text('The chapter that teaches it:', size="xs",
                             color="muted")
                     ui.link(cap.chapter, href=cap.chapter)
                 else:
-                    ui.badge(tr('no chapter yet',
-                                'pas encore de chapitre'), color="warning",
+                    ui.badge('no chapter yet', color="warning",
                              variant="soft", size="sm")
 
             ui.code(cap.snippet, lang="python")
 
             if cap.caveat:
                 ui.alert(cap.caveat, color="warning",
-                         title="Ce qu'il faut savoir avant")
+                         title="What to know first")
 
 
-@page(PATH, layout=shell, title=tr('What Bretzel can do',
-                                   'Ce que Bretzel sait faire'))
+@page(PATH, layout=shell, title='What Bretzel can do')
 def capabilities_page() -> None:
     filtre = Filtre()
 
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):
-            ui.heading(tr('What Bretzel can do',
-                          'Ce que Bretzel sait faire'), level=1, size="3xl")
+            ui.heading('What Bretzel can do', level=1, size="3xl")
             ui.text(
-                f"{len(CAPABILITIES)} capacités, chacune avec le symbole "
-                "par lequel on y entre et le plus petit code qui la met "
-                "en œuvre. C'est la réponse à « de quoi ce framework est "
-                "capable » — celle que ni l'arbre des dossiers, ni le "
-                "catalogue des composants ne peuvent donner.",
+                f"{len(CAPABILITIES)} capabilities, each with the symbol "
+                "you enter it through and the smallest code that puts it "
+                "to work. This is the answer to “what can this framework "
+                "do” — the one neither the folder tree nor the component "
+                "catalogue can give.",
                 color="muted", size="lg",
             )
 
             ui.alert(
-                tr('This page gives an overview. Every capability links to '
-                   'the chapter that explains it, with its entry point in the'
-                   ' API and its current limits.',
-                   'Cette page donne une vue d’ensemble. Chaque capacité '
-                   'renvoie vers le chapitre qui l’explique, avec son point '
-                   'd’entrée dans l’API et ses limites actuelles.'),
-                color="success", title=tr('An index lists, a chapter teaches',
-                                          'Un index liste, un chapitre '
-                                          'enseigne'),
+                'This page gives an overview. Every capability links to '
+                'the chapter that explains it, with its entry point in the'
+                ' API and its current limits.',
+                color="success", title='An index lists, a chapter teaches',
             )
 
             ui.alert(
-                tr('Use the filter to search for a need (“csv”, “realtime”, '
-                   '“theme”) even if you do not yet know the name of the '
-                   'matching component.',
-                   'Utilisez le filtre pour chercher un besoin (« csv », « '
-                   'temps réel », « thème ») même si vous ne connaissez pas '
-                   'encore le nom du composant correspondant.'),
-                color="info", title="Cherchez par besoin",
+                'Use the filter to search for a need (“csv”, “realtime”, '
+                '“theme”) even if you do not yet know the name of the '
+                'matching component.',
+                color="info", title="Search by need",
             )
 
             ui.input(
                 value=filtre.cherche,
-                placeholder=tr('Filter — “csv”, “dark”, “realtime”…',
-                               'Filtrer — « csv », « sombre », « temps réel »…'),
+                placeholder='Filter — “csv”, “dark”, “realtime”…',
                 clearable=True,
             )
 
@@ -165,8 +151,7 @@ def capabilities_page() -> None:
                     text=matiere,
                     key=lambda c: c.name,
                     empty=lambda: ui.text(
-                        tr('No capability matches that search.',
-                           'Aucune capacité ne correspond à cette recherche.'),
+                        'No capability matches that search.',
                         color="muted", size="sm",
                     ),
                 ):
@@ -174,17 +159,13 @@ def capabilities_page() -> None:
 
             with ui.card(color="surface"):
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('The same thing on the command line',
-                                  'La même chose en ligne de commande'),
+                    ui.heading('The same thing on the command line',
                                level=2, size="lg")
                     ui.code(
                         "py -m bretzel.cli.main describe capabilities\n",
                         lang="bash",
                     )
                     with ui.hstack(gap="sm", wrap=True, align="baseline"):
-                        ui.text(tr('For the detail of a symbol named above:',
-                                   "Pour le détail d'un symbole nommé ci-"
-                                   'dessus :'), color="muted", size="sm")
-                        ui.link("Catalogue ui.* →", href="/components")
-                        ui.link(tr("The framework's tree →",
-                                   "L'arbre du framework →"), href="/tree")
+                        ui.text('For the detail of a symbol named above:', color="muted", size="sm")
+                        ui.link("ui.* catalogue →", href="/components")
+                        ui.link("The framework's tree →", href="/tree")

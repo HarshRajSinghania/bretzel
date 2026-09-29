@@ -41,7 +41,6 @@ from bretzel.components.base._wiring import (
     dismiss_local_scope,
 )
 from bretzel.components.feedback.badge.theme import BADGE_THEME
-from bretzel.components.primitives.icon import Icon
 from bretzel.core.tree import Element, Node
 from bretzel.render import text
 from bretzel.state.scopes.client import ClientBinding
@@ -91,11 +90,10 @@ class Badge(Component):
         # Component slot without adopt_slot".
         self._label = Component.adopt_slot(label)
 
-        # Icons scale with the badge size : ``adopt_slot(icon_shortcut)``
-        # would build the Icon at its own ``sm`` default regardless. So
-        # resolve the matching ``icon_size`` HERE and pre-build any
-        # string-shortcut Icon at that size. Caller-passed Icon instances
-        # are left alone (explicit choice).
+        # Icons scale with the badge size : resolve the matching
+        # ``icon_size`` HERE and let ``adopt_slot`` build the shortcut
+        # Icon (a name or a binding) at that size. Caller-passed Icon
+        # instances are left alone (explicit choice).
         size_key = self._reactive_values.get("size") or "sm"
         # ``_resolved_theme()``, NOT ``self.THEME`` (the shipped dict
         # ignores a ``Theme(components={"badge": …})``) — otherwise the
@@ -103,27 +101,12 @@ class Badge(Component):
         size_map = self._resolved_theme().get("sizes", {}).get(size_key, {})
         icon_size = size_map.get("icon_size", "sm")
 
-        self._icon_left: Component | None = self._adopt_icon(
-            icon_left, icon_size,
+        self._icon_left: Component | None = Component.adopt_slot(
+            icon_left, icon_shortcut=True, icon_size=icon_size,
         )
-        self._icon_right: Component | None = self._adopt_icon(
-            icon_right, icon_size,
+        self._icon_right: Component | None = Component.adopt_slot(
+            icon_right, icon_shortcut=True, icon_size=icon_size,
         )
-
-    @staticmethod
-    def _adopt_icon(
-        value: Any,
-        icon_size: str,
-    ) -> Component | None:
-        """Wrap a string shortcut into an :class:`Icon` of the right
-        size, or pass an existing Component / ClientBinding through
-        the standard adopt_slot detach pipeline. Returns ``None``
-        when ``value`` is absent."""
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = Icon(value, size=icon_size)
-        return Component.adopt_slot(value, icon_shortcut=True)
 
     def render(self) -> Element:
         theme = self._resolved_theme()
@@ -216,11 +199,12 @@ class Badge(Component):
         # ── Root assembly ───────────────────────────────────────────
         root_attrs["class"] = root_class
         if show_close:
-            # Local bz-data ``open`` scope (keyed by bz-id, survives
-            # morphs). No FOUC pre-stamp — ``open: true`` paints visible.
-            # Both modes share this wiring : the × click sets ``open =
-            # false`` and the root ``bz-show`` hides the badge.
-            root_attrs.update(dismiss_local_scope())
+            # Local bz-data ``open`` scope. No FOUC pre-stamp — ``open:
+            # true`` paints visible. The × click sets ``open = false`` and
+            # the root ``bz-show`` hides the badge; with a server
+            # ``on_close``, the next render re-seeds ``open`` (the helper
+            # says why).
+            root_attrs.update(dismiss_local_scope(root_attrs))
         return Element(
             tag=self._tag,
             attrs=root_attrs,

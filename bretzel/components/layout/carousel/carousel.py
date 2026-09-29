@@ -62,6 +62,7 @@ driven alike are remembered once.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -70,7 +71,7 @@ from bretzel.components.base._wiring import (
     bool_attr,
     coerce_index,
     hidden_carrier_attrs,
-    server_sync_marker,
+    scope_literal,
 )
 from bretzel.components.base._wiring import (
     pop_change_handler as _pop_change_handler,
@@ -79,27 +80,67 @@ from bretzel.components.base.responsive import (
     BASE_KEYS,
     responsive_classes,
 )
-from bretzel.components.layout.carousel.theme import CAROUSEL_THEME, DOTS_HIDDEN
+from bretzel.components.layout.carousel.theme import (
+    CAROUSEL_THEME,
+    DOTS_HIDDEN,
+    _slide_basis,
+)
 from bretzel.components.primitives.icon import Icon
 from bretzel.core.tree import Element, Node
 from bretzel.render import text
 
 
-def _per_view_class(value: Any) -> str:
+def _per_view_class(value: Any, table: dict[str, str]) -> str:
     """One ``per_view`` value → a slide's width class.
 
-    ``1`` → ``basis-full``; ``N`` → ``basis-1/N``. A string passes
-    verbatim (the raw Tailwind escape hatch, same contract as
-    ``Grid(cols=)``). Breakpoints are NOT handled here:
-    :func:`responsive_classes` wraps this function and owns the ``{bp}:``
-    prefixing for every graded prop in the library.
+    ``N`` → the theme's ``per_view`` table (``1`` → ``basis-full``, ``N``
+    → the width that fits N slides AND their gaps, cf.
+    ``theme._slide_basis``). A string passes verbatim (the raw Tailwind
+    escape hatch, same contract as ``Grid(cols=)``). Breakpoints are NOT
+    handled here: :func:`responsive_classes` wraps this function and owns
+    the ``{bp}:`` prefixing for every graded prop in the library.
     """
     if value is None or isinstance(value, bool):
         return ""
     if isinstance(value, str):
         return value
-    count = int(value)
-    return "basis-full" if count <= 1 else f"basis-1/{count}"
+    count = max(1, int(value))
+    return table.get(str(count)) or _slide_basis(count)
+
+
+#: A gap utility of the track: ``gap-4``, ``gap-x-4``, ``gap-px``,
+#: ``gap-[20px]``, ``gap-(--my-gap)`` — Tailwind v4's forms.
+_GAP_CLASS = re.compile(
+    r"^gap(?:-x)?-(?:(\d+(?:\.\d+)?)|(px)|\[(.+)\]|\((--[\w-]+)\))$"
+)
+
+
+def _gap_length(classes: str) -> str:
+    """The CSS length the track's gap class sets — for ``--bz-gap``.
+
+    The slide width subtracts the gaps (``theme._slide_basis``), so it
+    needs the gap as a LENGTH, and CSS cannot read one property from
+    another. Rather than a second table that would have to agree with
+    ``gaps`` (and drift the day an app overrides one of the two), the
+    length is read off the gap class itself, following Tailwind v4's
+    definition: ``gap-N`` is ``calc(var(--spacing) * N)``. An override
+    this does not recognise yields ``0px`` — the slides then take
+    ``1/N`` of the track, the behaviour before the gap was accounted
+    for, never a broken layout.
+    """
+    for token in classes.split():
+        match = _GAP_CLASS.match(token)
+        if match is None:
+            continue
+        step, px, arbitrary, variable = match.groups()
+        if step is not None:
+            return f"calc(var(--spacing) * {step})"
+        if px:
+            return "1px"
+        if arbitrary:
+            return arbitrary.replace("_", " ")
+        return f"var({variable})"
+    return "0px"
 
 
 def _per_view_at_base(value: Any) -> int:
@@ -130,62 +171,6 @@ def _per_view_at_base(value: Any) -> int:
     return max(1, int(value))
 
 
-def _build_bz_data(
-    *,
-    scope_key: str,
-    has_local_value: bool,
-    initial_value: int,
-    binding_path: str | None,
-    server_synced: bool,
-    autoplay: bool,
-) -> str:
-    """The instance's ``bz-data``: **data, not code**.
-
-    The methods (geometry, ``goTo``/``next``/``prev``, the two
-    position↔state bridges) live once in ``$bz.carousel.scope``.
-
-    ``_track`` is declared ``null`` then filled by the root's
-    ``bz-init``: a scope method has no access to ``$refs``, only
-    directives do (same constraint and same remedy as Slider).
-
-    ``still`` is only emitted if an autoplay exists, and it is a DECLARED
-    signal, not a field set on the fly: it is the
-    ``$bz._tick($el, !still, ms)`` effect that reads it, and an
-    undeclared field would never re-run that effect — the rotation would
-    never stop.
-
-    ``_geom`` is declared for the SAME reason, and it is what makes the
-    arrows right. The bound is MEASURED (``scrollWidth - clientWidth``),
-    and a measurement is not a signal: without a declared field to read,
-    ``bz-attr:disabled="_atEnd()"`` evaluates once at scan time and
-    freezes. Hydrated before the stylesheet applies, it measures a track
-    that is not yet ``flex`` — so nothing to scroll, so BOTH arrows
-    disabled, so invisible (``disabled:opacity-0``), for good. The field
-    must be declared HERE: set on the fly on the JS side, it would not
-    exist at the effect's first pass, which would therefore never
-    subscribe to it.
-    """
-    if has_local_value:
-        sync = server_sync_marker(scope_key, enabled=server_synced)
-        state = f"{scope_key}: {json.dumps(initial_value)},{sync} "
-        target = f"this.{scope_key}"
-    else:
-        assert binding_path is not None
-        state = ""
-        target = binding_path
-
-    return (
-        "{...$bz.carousel.scope,"
-        + state
-        + ("still: false," if autoplay else "")
-        + "_geom: 0,"
-        + "_track: null,"
-        + f"_read() {{ return {target}; }},"
-        + f"_write(v) {{ {target} = v; }}"
-        + "}"
-    )
-
-
 class Carousel(Component):
     """Render a snapping track whose direct children are slides."""
 
@@ -194,11 +179,11 @@ class Carousel(Component):
     BINDABLE_PROPS: ClassVar[tuple[str, ...]] = ("value",)
     IMPERATIVE: ClassVar[tuple[str, ...]] = ("set", "next", "prev")
     EVENTS: ClassVar[tuple[str, ...]] = ("change",)
-    # ``per_view`` is the only graded prop, and its class is assembled by
-    # ``_per_view_class`` (closed by ``_LAYOUT_CLASSES``). What remains is
-    # the hiding of the dots, whose class lives in the ``responsive``
-    # table.
-    RESPONSIVE_THEME_KEYS: ClassVar[tuple[str, ...]] = ("responsive",)
+    # ``per_view`` is the only graded prop; its classes come from the
+    # ``per_view`` table, and the hiding of the dots from the
+    # ``responsive`` one. Both are declared here so the safelist closes
+    # them over the breakpoints.
+    RESPONSIVE_THEME_KEYS: ClassVar[tuple[str, ...]] = ("responsive", "per_view")
     RESPONSIVE_PROPS: ClassVar[frozenset[str]] = frozenset({"per_view"})
 
     value: Any = reactive_prop(
@@ -286,7 +271,12 @@ class Carousel(Component):
         active_expr = binding_path or scope_key
 
         # ── The slides = the children, one by one ───────────────────
-        slide_class = self.slot_class("slide", responsive_classes(per_view, _per_view_class)
+        per_view_table = theme.get("per_view", {})
+        slide_class = self.slot_class(
+            "slide",
+            responsive_classes(
+                per_view, lambda v: _per_view_class(v, per_view_table),
+            ),
         )
         slides: list[Element] = []
         for child in self._children:
@@ -308,10 +298,14 @@ class Carousel(Component):
         # The dots only exist where they have a referent.
         has_dots = has_controls and base_per_view == 1
 
+        gap_class = gaps.get(gap_key, "")
         track = Element(
             tag="div",
             attrs={
-                "class": self.slot_class("track", gaps.get(gap_key, "")),
+                "class": self.slot_class("track", gap_class),
+                # The gap as a length, inherited by the slides, whose
+                # width subtracts it (``theme._slide_basis``).
+                "style": f"--bz-gap:{_gap_length(gap_class)}",
                 "bz-ref": "bztrack",
                 # What makes the bounds be re-measured when the layout
                 # changes AFTER the scan (a late stylesheet, a collapsed
@@ -471,13 +465,27 @@ class Carousel(Component):
         # one block.
         root_attrs["role"] = "group"
         root_attrs["aria-roledescription"] = "carousel"
-        root_attrs["bz-data"] = _build_bz_data(
-            scope_key=scope_key,
-            has_local_value=value_binding is None,
-            initial_value=initial_index,
+        # The methods (geometry, ``goTo``/``next``/``prev``) live once in
+        # ``$bz.carousel.scope``. Three DECLARED client fields:
+        #
+        # - ``still``, only with an autoplay: the ``$bz._tick($el, !still,
+        #   ms)`` effect reads it, and an undeclared field would never
+        #   re-run that effect — the rotation would never stop;
+        # - ``_geom``, for the same reason: the bound is MEASURED
+        #   (``scrollWidth - clientWidth``) and a measurement is not a
+        #   signal. Without a declared field to read, the arrows'
+        #   ``_atEnd()`` froze at scan time — both disabled, so invisible;
+        # - ``_track``, filled by the root's ``bz-init``: a scope method
+        #   has no ``$refs``, only directives do.
+        fields = {"still": "false"} if autoplay else {}
+        fields.update({"_geom": "0", "_track": "null"})
+        root_attrs["bz-data"] = scope_literal(
+            "$bz.carousel.scope",
+            cell=scope_key,
+            initial=json.dumps(initial_index),
             binding_path=binding_path,
             server_synced=value_server_backed,
-            autoplay=bool(autoplay),
+            fields=fields,
         )
         # A scope method has no ``$refs`` — it is here, in directive
         # context, that we capture the track into the scope.

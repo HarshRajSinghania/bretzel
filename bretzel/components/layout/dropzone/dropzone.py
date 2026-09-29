@@ -39,6 +39,10 @@ un-expressible, which is exactly the case the framing names.
   and nothing would catch the disagreement if one inserts while the
   other announces a replacement.
 
+- ``terminal=True`` makes a zone an action target (archive, delete), not
+  a container for the dragged item. Hovering it keeps the floating
+  preview visible without inserting the card into the zone.
+
 **What the gesture SHOWS, and where that is set.** By default the card
 in flight keeps its size: the landing zone opens by the height of a
 card. The other convention — a thin placeholder, à la
@@ -82,6 +86,7 @@ class Dropzone(Component):
 
     color: str = reactive_prop(default="primary", emit_attr=False)
     locked: bool = reactive_prop(default=False, emit_attr=False)
+    terminal: bool = reactive_prop(default=False, emit_attr=False)
 
     def __init__(
         self,
@@ -90,11 +95,13 @@ class Dropzone(Component):
         accepts: Iterable[str] | None = None,
         holds: str | None = None,
         locked: bool | None = None,
+        terminal: bool | None = None,
         color: str | None = None,
         on_move: Callable[..., Any] | str | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(color=color, locked=locked, on_move=on_move, **kwargs)
+        super().__init__(color=color, locked=locked, terminal=terminal,
+                         on_move=on_move, **kwargs)
         self._name = name
         self._holds = holds
         # Materialised at construction : ``accepts`` may legitimately be a
@@ -117,6 +124,7 @@ class Dropzone(Component):
 
     def render(self) -> Element:
         locked = bool(self._reactive_values.get("locked"))
+        terminal = bool(self._reactive_values.get("terminal"))
 
         attrs = self.emit_attrs()
 
@@ -129,6 +137,8 @@ class Dropzone(Component):
             attrs["data-bz-accepts"] = ",".join(self._accepts)
         if locked:
             attrs["data-bz-locked"] = "true"
+        if terminal:
+            attrs["data-bz-terminal"] = "true"
         # ⚠️ ``one`` only: ``many`` is the default and has nothing to
         # write. An attribute set to say "as usual" weighs down every
         # zone on the page without any selector reading it.

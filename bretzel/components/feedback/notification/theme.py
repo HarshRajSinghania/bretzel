@@ -116,7 +116,7 @@ NOTIFICATION_THEME: dict[str, Any] = {
         # Inner column inside the stack — caps width so toasts don't
         # blow past the viewport on mobile.
         "stack_inner": (
-            "flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]"
+            "flex flex-col gap-2 w-[20rem] max-w-[calc(100vw-2rem)]"
         ),
     },
     # Neutral fallback chrome when the runtime is asked for an

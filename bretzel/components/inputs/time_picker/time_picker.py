@@ -54,7 +54,7 @@ from bretzel.components.base._wiring import (
     imperative_listeners,
     install_open_close_toggle,
     install_value_commands,
-    server_sync_marker,
+    scope_literal,
 )
 from bretzel.components.inputs._picker_field import (
     anchored_panel,
@@ -248,36 +248,6 @@ class TimePicker(Component):
             self, focus_selector="input:not([type=hidden])"
         )
 
-
-    def _value_target(self) -> str:
-        """The same value, as a METHOD BODY must address it.
-
-        A method body is NOT wrapped in ``with($scope)``: the bare
-        identifier ``value`` raises ``value is not defined`` there, and
-        the whole panel becomes inert — the clicks write nothing,
-        silently on the server side. It takes ``this.value``.
-
-        The store path, for its part, is global: it is written the same
-        on both sides. That is what makes the bug INVISIBLE in binding
-        mode and present only in literal mode — so absent from half the
-        tests if one is not careful.
-
-        (The trap has been documented since Pagination: "in a method
-        body, a bare identifier does not see the scope". I brought it
-        back by copying DatePicker's expression, which only uses it in
-        directives.)
-        """
-        binding = self._binding_metadata.get("value")
-        if binding is not None:
-            return self.path_of(binding)
-        # The key comes from the DECLARATION, never from a literal. It
-        # was hard-coded ``"this.val"`` here until 2026-09-07, and it is
-        # the only site the normalisation of scope keys missed: the whole
-        # panel went inert in literal mode, with no JS error and no red
-        # test — only ``probe_time_picker_cells`` said so. Exactly the
-        # failure mode this helper documents above, applied to itself.
-        return f"this.{self._scope_keys('value')[0]}"
-
     def render(self) -> Element:
         theme = self._resolved_theme()
         sizes = theme.get("sizes", {})
@@ -304,8 +274,20 @@ class TimePicker(Component):
         )
         name = detach_wrapper_carriers(self, root_attrs)
         root_attrs["class"] = self.slot_class("root")
-        root_attrs["bz-data"] = self._scope_literal(
-            initial, self._value_target()
+        # The methods (``_parts`` / ``_is`` / ``pick``) live once in
+        # ``$bz.time.scope`` — a panel has 28 buttons, writing the pick
+        # out on each would serialise the same algorithm 28 times.
+        binding = self._binding_metadata.get("value")
+        root_attrs["bz-data"] = scope_literal(
+            "$bz.time.scope",
+            cell=self._scope_keys("value")[0],
+            initial=json.dumps(initial),
+            binding_path=self.path_of(binding) if binding is not None else None,
+            server_synced=self._value_server_backed("value"),
+            fields={
+                "open": "false",
+                "_closeOnPick": "true" if self._close_on_pick else "false",
+            },
         )
         # ── The receivers of the imperative API ──────────────────
         #
@@ -315,13 +297,14 @@ class TimePicker(Component):
         # Sidebar, Dialog and Select.
         for _ev, _handler in imperative_listeners("open").items():
             root_attrs.setdefault(_ev, _handler)
-        # ⚠️ `value_expr()` and NOT `_value_target()`. A `bz-on:` is a
+        # ⚠️ `value_expr()` and NOT `this.value`. A `bz-on:` is a
         # DIRECTIVE, so evaluated in a `with($scope)` where the bare
         # identifier `value` resolves; `this.value` designates nothing
-        # there. It is the exact mirror of the trap `_value_target`
-        # documents, and it only shows in LITERAL mode: in bound mode
-        # both render the same store path. Measured — `.set()` set
-        # nothing on the time_picker, and on it alone.
+        # there. It is the exact mirror of a scope METHOD body, where
+        # only `this.value` resolves (`scope_literal` writes that one),
+        # and it only shows in LITERAL mode: in bound mode both render
+        # the same store path. Measured — `.set()` set nothing on the
+        # time_picker, and on it alone.
         root_attrs.setdefault(
             "bz-on:bz-set", f"{value_expr(self)} = $event.detail.value"
         )
@@ -495,42 +478,6 @@ class TimePicker(Component):
         )
 
     # ── Piece factory ───────────────────────────────────────────────
-
-    def _scope_literal(self, initial: str, target: str) -> str:
-        """The instance's ``bz-data``: **data, not code**.
-
-        The methods (``_parts`` / ``_is`` / ``pick``) live once in
-        ``$bz.time.scope`` — a panel has 28 buttons, writing the pick out
-        in full on each would serialise the same algorithm 28 times per
-        instance.
-
-        ``_read`` / ``_write`` cover both value modes with the same
-        methods. It is not an elegance: a bound expression MUST live in a
-        method body, the only place re-read on every call hence tracked.
-        As a field, it would be frozen at mount (cf. traps.md § "a
-        bz-data field is not reactive").
-
-        ⚠️ ``target`` comes from :meth:`_value_target`, NOT from
-        :func:`~bretzel.components.inputs._picker_field.value_expr`: here
-        we are in a method body, where the bare identifier does not
-        resolve. Paid once — the whole panel was inert in literal mode,
-        and only the browser said so ("val is not defined").
-        """
-        local = ""
-        if self._binding_metadata.get("value") is None:
-            (key,) = self._scope_keys("value")
-            sync = server_sync_marker(
-                key, enabled=self._value_server_backed("value")
-            )
-            local = f"{key}: {json.dumps(initial)},{sync} "
-        return (
-            "{...$bz.time.scope,open: false,"
-            + local
-            + f"_closeOnPick: {'true' if self._close_on_pick else 'false'},"
-            + f"_read() {{ return {target}; }},"
-            + f"_write(v) {{ {target} = v; }}"
-            + "}"
-        )
 
     def _icon(self, name: str, size_cfg: dict[str, Any]) -> Element:
         return Element(

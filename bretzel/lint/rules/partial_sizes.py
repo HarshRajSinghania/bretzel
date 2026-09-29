@@ -85,9 +85,13 @@ import pathlib
 from bretzel.lint import corpus
 from bretzel.lint.corpus import Module
 from bretzel.lint.report import Finding
+from bretzel.lint.rules._theme_calls import THEME_CALLABLE, called_name
 
 #: The rule's name, as it appears in a finding.
 RULE = "half-overridden-size-step"
+
+#: Built once: an inline ``A | B`` is rebuilt for every node walked.
+_ASSIGNMENTS = (ast.Assign, ast.AnnAssign)
 
 
 def _family() -> frozenset[str]:
@@ -98,30 +102,26 @@ def _family() -> frozenset[str]:
     :mod:`bretzel.lint.rules.sizes`, and for the same reason — a table
     copied into a linter drifts from the code it judges.
     """
-    from bretzel.introspect import ComponentInfo, describe_components
+    from bretzel.introspect import ComponentInfo
 
     return frozenset(
         info.ui_name
-        for info in describe_components()
+        for info in corpus.catalogue().values()
         if isinstance(info, ComponentInfo)
         and info.family == "inputs"
         and info.size_values
     )
 
 
-def _theme_calls(tree: ast.AST) -> list[ast.Call]:
+def _theme_calls(module: Module) -> list[ast.Call]:
     return [
         node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and (
-            (isinstance(node.func, ast.Name) and node.func.id == "Theme")
-            or (isinstance(node.func, ast.Attribute) and node.func.attr == "Theme")
-        )
+        for node in module.nodes
+        if isinstance(node, ast.Call) and called_name(node) == THEME_CALLABLE
     ]
 
 
-def _module_dicts(tree: ast.AST) -> dict[str, ast.Dict]:
+def _module_dicts(module: Module) -> dict[str, ast.Dict]:
     """The module constants that are a literal dict.
 
     ``Theme(components=COMPONENTS)`` is this repository's idiom —
@@ -132,8 +132,8 @@ def _module_dicts(tree: ast.AST) -> dict[str, ast.Dict]:
     like it works.
     """
     out: dict[str, ast.Dict] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign | ast.AnnAssign):
+    for node in module.nodes:
+        if not isinstance(node, _ASSIGNMENTS):
             continue
         if not isinstance(node.value, ast.Dict):
             continue
@@ -211,7 +211,7 @@ def _used_in_theme(theme: pathlib.Path) -> frozenset[str]:
             node.func.attr
             for m in corpus.current()
             if root in m.path.resolve().parents
-            for node in ast.walk(m.tree)
+            for node in m.nodes
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and isinstance(node.func.value, ast.Name)
@@ -223,6 +223,9 @@ def _used_in_theme(theme: pathlib.Path) -> frozenset[str]:
 
 def check(module: Module) -> list[Finding]:
     """The themes that resize only part of the family."""
+    calls = _theme_calls(module)
+    if not calls:
+        return []
     family = _family()
     if not family:  # pragma: no cover — introspection is gated elsewhere
         return []
@@ -231,8 +234,8 @@ def check(module: Module) -> list[Finding]:
         family = frozenset(family & used)
 
     findings: list[Finding] = []
-    known = _module_dicts(module.tree)
-    for call in _theme_calls(module.tree):
+    known = _module_dicts(module)
+    for call in calls:
         resized, line = _resized(call, known)
         touched = resized & family
         if not touched:

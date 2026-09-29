@@ -310,6 +310,13 @@ SINK_ELEMENT_ID: Final[str] = "bz-sink"
 # envelope and patch tags).
 NAV_PENDING_KEY: Final[str] = "@nav"
 
+#: The event a partial response carries its page title in (``HX-Trigger``,
+#: ``render/pipeline.py``): such a response has no ``<head>``, so without
+#: a listener the tab keeps the previous page's title after every partial
+#: navigation. Both sides name it — Python in the header, JS in the
+#: listener (``__TITLE_EVENT__``, substituted at build time).
+TITLE_EVENT: Final[str] = "bretzel:title"
+
 
 # ───────────────────────────────────────────────────────────────────────────
 # Outlet convention helper

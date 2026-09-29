@@ -664,9 +664,19 @@ _PROBES: dict[str, _Probe] = {
                     ui.input(placeholder="Titre")
                     ui.select(options=[], size="sm")
                     ui.select(options=[], size="sm")
+
+            def rangee_nichee_melangee():
+                with ui.hstack():
+                    ui.textarea(size="sm")
+                    with ui.hstack():
+                        ui.number_input(size="sm")
+                        ui.number_input(size="sm")
+                        ui.combobox(options=[])
             """
         ).strip(),
-        must_flag=("date_range_picker", "input"),
+        # ``combobox`` : une rangée NICHÉE reste jugée — c'est un autre
+        # voisinage, pas une exemption.
+        must_flag=("date_range_picker", "input", "combobox"),
         # Les quatre formes correctes qui ressemblent à la faute :
         #
         # - un groupe où TOUT est explicitement à `sm` ;
@@ -678,7 +688,15 @@ _PROBES: dict[str, _Probe] = {
         #   faisait passer les constats de 2 à 22 sur `examples/`, tous
         #   faux (un groupe avalait une carte entière) ;
         # - deux tailles dans des conteneurs de ligne DIFFÉRENTS : deux
-        #   voisinages, donc aucun rapport visuel.
+        #   voisinages, donc aucun rapport visuel ;
+        # - une rangée `with ui.hstack()` NICHÉE sous un champ : son corps
+        #   est une autre rangée (faux positif mesuré sur l'atelier du
+        #   cockpit le 2026-09-27, la zone de saisie) ;
+        # - la même rangée posée DIRECTEMENT dans le corps d'une autre, ou
+        #   ouverte par un `with` à plusieurs contextes : le balayage ne
+        #   regardait que les enfants des instructions du corps, jamais
+        #   l'instruction elle-même (faux positif relevé sur la vitrine le
+        #   2026-09-29).
         legitimate=textwrap.dedent(
             """
             from bretzel import ui
@@ -703,6 +721,25 @@ _PROBES: dict[str, _Probe] = {
                     ui.input(size="sm")
                 with ui.hstack():
                     ui.select(options=[])
+
+            def rangee_sous_un_champ():
+                with ui.form():
+                    with ui.vstack():
+                        ui.textarea(rows=2)
+                        with ui.hstack():
+                            ui.file_upload(size="sm")
+
+            def rangee_directement_nichee():
+                with ui.hstack():
+                    ui.input(size="sm")
+                    with ui.hstack():
+                        ui.select(options=[])
+
+            def rangee_nichee_a_plusieurs_contextes():
+                with ui.grid(cols=2):
+                    ui.input(size="sm")
+                    with ui.form_field(label="Type"), ui.hstack():
+                        ui.select(options=[])
             """
         ).strip(),
         # Deux bancs du playground comparent délibérément deux tailles

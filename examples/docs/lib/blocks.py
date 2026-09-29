@@ -21,7 +21,6 @@ import textwrap
 
 from bretzel import ui
 from bretzel.state import ClientState, field
-from examples.docs.lib.i18n import tr
 from bretzel.introspect import (
     ComponentInfo,
     HelperInfo,
@@ -47,17 +46,14 @@ def callable_signature(fn: object, *, title: str | None = None) -> None:
     # twin `params_table` already had this guard; this one did not, and
     # both live in this file.
     if not info.params:
-        ui.text(tr('No parameter.',
-                   'Aucun paramètre.'), color="muted", size="sm")
+        ui.text('No parameter.', color="muted", size="sm")
         return
     ui.table(
         columns=[
-            ui.column("param", label=tr('Parameter',
-                                        'Paramètre')),
+            ui.column("param", label='Parameter'),
             ui.column("type", label="Type"),
-            ui.column("default", label=tr('Default',
-                                          'Défaut')),
-            ui.column("kind", label="Passage"),
+            ui.column("default", label='Default'),
+            ui.column("kind", label="Passed as"),
         ],
         rows=[
             {
@@ -90,8 +86,7 @@ def live_source(objects: tuple[object, ...]) -> str:
     return "\n\n\n".join(parts)
 
 
-def source_view(*objects: object, label: str = tr('See the Python code',
-                                                  'Voir le code Python')) -> None:
+def source_view(*objects: object, label: str = 'See the Python code') -> None:
     """Collapsible "see the code" disclosure — each object's live source,
     hidden behind a toggle. Reusable across every chapter: wrap a demo's
     building blocks (state class + handlers + zone) and the reader can
@@ -127,8 +122,7 @@ def emitted_html_block(label: str, html_source: str) -> None:
     inspector = DocsInspector()
     with ui.hstack(align="center", gap="sm"):
         ui.switch(checked=inspector.show_html)
-        ui.text(tr('See the emitted HTML',
-                   'Voir le HTML émis'), color="muted", size="sm")
+        ui.text('See the emitted HTML', color="muted", size="sm")
     with ui.vstack(gap="xs", visible=inspector.show_html):
         ui.text(label, color="muted", size="xs")
         ui.code(html_source, lang="html")
@@ -162,18 +156,16 @@ def state_mirror(state_cls: type) -> None:
             ]
             ui.table(
                 columns=[
-                    ui.column("field", label="Champ"),
+                    ui.column("field", label="Field"),
                     ui.column("type", label="Type"),
-                    ui.column("default", label=tr('Default',
-                                                  'Défaut')),
+                    ui.column("default", label='Default'),
                     ui.column("validators", label="@validator"),
                 ],
                 rows=rows,
                 size="sm",
             )
         else:
-            ui.text(tr('(no field declared)',
-                       '(aucun champ déclaré)'), color="muted", size="sm")
+            ui.text('(no field declared)', color="muted", size="sm")
 
         url_line(info)
 
@@ -185,8 +177,8 @@ def state_mirror(state_cls: type) -> None:
 
         if info.whole_validators:
             ui.text(
-                f"+ {info.whole_validators} validator(s) d'instance "
-                "(invariants multi-champs)",
+                f"+ {info.whole_validators} instance validator(s) "
+                "(multi-field invariants)",
                 color="muted", size="sm",
             )
 
@@ -205,7 +197,7 @@ def url_line(info: StateInfo) -> None:
     nowhere else on this page.
     """
     if info.url_error:
-        ui.text(f"URL — déclaration refusée : {info.url_error}",
+        ui.text(f"URL — declaration refused: {info.url_error}",
                 color="error", size="sm")
         return
     publies = info.url_params or info.url_named
@@ -213,20 +205,15 @@ def url_line(info: StateInfo) -> None:
         return
     allume = bool(info.url_params)
     with ui.hstack(gap="xs", align="center", wrap=True):
-        ui.text(tr('In the URL:',
-                   "Dans l'URL :") if allume else tr('Named for the URL:',
-                                                 "Nommés pour l'URL :"),
+        ui.text('In the URL:' if allume else 'Named for the URL:',
                 color="muted", size="sm")
         for champ, param in publies:
             ui.badge(f"{champ} → {param}",
                      color="primary" if allume else "muted", variant="soft")
     ui.text(
-        tr('A field missing from this row never goes into the URL.',
-           "Un champ absent de cette ligne ne part jamais dans l'URL.")
+        'A field missing from this row never goes into the URL.'
         if allume else
-        tr('Off: `addressable=True` on the class would publish those fields.',
-           'Éteint : `addressable=True` sur la classe publierait ces champs-'
-           'là.'),
+        'Off: `addressable=True` on the class would publish those fields.',
         color="muted", size="xs",
     )
 
@@ -248,11 +235,9 @@ def params_table(params: tuple[ParamInfo, ...]) -> None:
         return
     ui.table(
         columns=[
-            ui.column("param", label=tr('Parameter',
-                                        'Paramètre')),
+            ui.column("param", label='Parameter'),
             ui.column("type", label="Type"),
-            ui.column("default", label=tr('Default',
-                                          'Défaut')),
+            ui.column("default", label='Default'),
         ],
         rows=[
             {"param": p.name, "type": p.type_label,
@@ -298,8 +283,7 @@ def component_mirror(info: ComponentInfo) -> None:
         if info.bindable_audited:
             contract_chips("BINDABLE_PROPS", info.bindable, "success")
         else:
-            ui.text(tr('BINDABLE_PROPS: not audited (legacy mode)',
-                       'BINDABLE_PROPS : non audité (mode legacy)'),
+            ui.text('BINDABLE_PROPS: not audited (legacy mode)',
                     color="muted", size="xs", classes="font-mono")
         contract_chips("EVENTS", info.events, "info")
         contract_chips("IMPERATIVE", info.imperative, "primary")
@@ -324,9 +308,8 @@ def client_algebra_mirror() -> None:
                 ui.badge(str(len(items)), color="muted", variant="outline")
             ui.table(
                 columns=[
-                    ui.column("py", label="En Python"),
-                    ui.column("js", label=tr('Emitted JS (live)',
-                                             'JS émis (live)')),
+                    ui.column("py", label="In Python"),
+                    ui.column("js", label='Emitted JS (live)'),
                     ui.column("ret", label="→"),
                 ],
                 rows=[
@@ -345,8 +328,7 @@ def helper_mirror(info: HelperInfo) -> None:
     with ui.vstack(gap="sm"):
         with ui.hstack(gap="xs", align="center", wrap=True):
             ui.badge(info.kind, color="warning", variant="soft")
-            ui.text(tr('not a component',
-                       'pas un composant'), color="muted", size="xs")
+            ui.text('not a component', color="muted", size="xs")
         summary = first_line(info.doc)
         if summary:
             ui.text(summary, color="muted", size="sm")
@@ -373,10 +355,9 @@ def toplevel_surface_mirror() -> None:
                 ui.badge(str(len(items)), color="muted", variant="outline")
             ui.table(
                 columns=[
-                    ui.column("name", label="Nom"),
+                    ui.column("name", label="Name"),
                     ui.column("kind", label="Nature"),
-                    ui.column("doc", label=tr('What it does',
-                                              'Ce que ça fait')),
+                    ui.column("doc", label='What it does'),
                 ],
                 rows=[
                     {"name": s.name, "kind": s.kind, "doc": s.summary or "—"}

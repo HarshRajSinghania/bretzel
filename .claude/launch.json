@@ -76,6 +76,15 @@
         "examples.ecole.main"
       ],
       "port": 8019
+    },
+    {
+      "name": "showcase",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "examples.showcase.main"
+      ],
+      "port": 8020
     }
   ]
 }

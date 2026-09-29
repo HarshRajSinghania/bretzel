@@ -25,6 +25,7 @@ from bretzel.components.base.testing import render_isolated
 from bretzel.render import serialize_html
 from bretzel.server.routing.actions import _hydrate_state, _state_params
 from bretzel.state import FormError, ServerState, field, validator
+from bretzel.state.fields.descriptor import assign_fields
 from bretzel.state.scopes.client import rendering_scope
 
 # ── Appeler la coroutine d'hydratation depuis un test synchrone ──────
@@ -298,3 +299,47 @@ def test_explicit_error_stays_frozen_no_auto_clear() -> None:
         html = serialize_html(field)
     assert "frozen" in html
     assert "errShown" not in html  # explicit error doesn't auto-clear
+
+
+# ── The submission is ONE batch for whole-instance validators ────────
+
+
+class _Signup(ServerState, scope="page"):
+    password: str = field(default='')
+    confirm: str = field(default='')
+
+    @validator
+    def _same(self) -> None:
+        if self.password and self.confirm and self.password != self.confirm:
+            raise FormError("Passwords do not match.")
+
+
+def test_a_matching_pair_passes_after_a_mismatched_one() -> None:
+    """Checked field by field, "hunter22"/"hunter22" was reported different
+    when the stored confirmation was still the previous one: the new
+    password met the OLD confirmation, was refused and rolled back."""
+    form = _Signup()  # as persisted: a previous, mismatched pair
+    form.__dict__["_field_password"] = "old-one"
+    form.__dict__["_field_confirm"] = "other"
+    errors, rejected = assign_fields(form, {"password": "hunter22",
+                                            "confirm": "hunter22"})
+    assert errors == {} and rejected == set()
+    assert (form.password, form.confirm) == ("hunter22", "hunter22")
+
+
+def test_a_refused_batch_restores_every_field_it_wrote() -> None:
+    form = _Signup()
+    errors, rejected = assign_fields(form, {"password": "a", "confirm": "b"})
+    assert errors == {"_": "Passwords do not match."}
+    assert rejected == {"password", "confirm"}
+    assert (form.password, form.confirm) == ("", "")
+
+
+def test_a_handler_parameter_is_coerced_to_its_annotation() -> None:
+    """``def reached(step: int)`` received ``"3"`` and ``step > 2`` raised."""
+    from bretzel.state.fields.descriptor import coerce_form_value
+
+    assert coerce_form_value("3", int) == (True, 3)
+    assert coerce_form_value("true", bool) == (True, True)
+    assert coerce_form_value("", int) == (False, None)
+    assert coerce_form_value("x", str) == (True, "x")

@@ -624,7 +624,10 @@ class Datatable(Component):
             # stops matching the plain header next to it. Cf. theme.py.
             size="xs",
             icon_right=icons.get(state.sort_dir if active else "", ""),
-            classes=slots.get("head_button", ""),
+            classes=" ".join(filter(None, (
+                slots.get("head_button", ""),
+                theme.get("head_button_aligns", {}).get(col.align, ""),
+            ))),
             on_click=functools.partial(
                 sort_by, state_qualname(self._state_cls), col.key
             ),

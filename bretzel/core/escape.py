@@ -133,22 +133,6 @@ def escape_inline_json(payload: str) -> str:
 # ───────────────────────────────────────────────────────────────────────────
 
 
-class RawAttrValue(str):
-    """Marker subclass of ``str`` that bypasses ``escape_attr``.
-
-    Used for attribute values whose content is a JS expression already
-    composed by the framework (typically the ``bz-class`` / ``bz-attr:``
-    expressions emitted for the client runtime — there is **no** ``bz-bind``
-    directive, that name sat here until 2026-08-01). The payload is trusted
-    to be syntactically valid for an HTML double-quoted attribute — it
-    must not contain literal ``"`` chars or other attribute-breaking
-    bytes. The framework controls the call site so this is a safe escape
-    hatch; user code never reaches it.
-    """
-
-    __slots__ = ()
-
-
 #: Attributes that name a RESOURCE TO LOAD, and for which an empty value
 #: is never an intention — it is a bug.
 #:
@@ -177,9 +161,6 @@ def serialize_attrs(attrs: Mapping[str, Any]) -> str:
             continue
         if value is True:
             parts.append(name)
-            continue
-        if isinstance(value, RawAttrValue):
-            parts.append(f'{name}="{value}"')
             continue
         escaped = escape_attr(str(value))
         parts.append(f'{name}="{escaped}"')

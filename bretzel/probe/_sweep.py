@@ -55,9 +55,13 @@ _GEOMETRY_JS = r"""
         }
         // Clipped FOR GOOD: no scrollbar, no recourse. The 2 px margin
         // sets aside the sub-pixel rounding of a line of text, which
-        // hides nothing.
+        // hides nothing. A box of 1 px both ways is hidden ON PURPOSE —
+        // ``sr-only``: a native input a component drives, a label for
+        // screen readers — and shows nothing a reader would miss.
+        const visuallyHidden = el.clientWidth <= 1 && el.clientHeight <= 1;
         if (/hidden|clip/.test(st.overflowY)
             && el.clientHeight > 0
+            && !visuallyHidden
             && el.scrollHeight > el.clientHeight + 2
             && el.offsetParent !== null) {
             clipped.push({
@@ -189,6 +193,16 @@ def _geometry(check: Check, window: Window, label: str) -> None:
     )
 
 
+#: Plants the walk's starting point at the head of ``<body>``.
+_TAB_START_JS = """() => {
+  const start = document.createElement('span');
+  start.id = 'bz-probe-tab-start';
+  start.tabIndex = -1;
+  document.body.prepend(start);
+  start.focus();
+}"""
+
+
 def _tab_order(check: Check, window: Window) -> None:
     """Where tabbing lands — and where it has no business being.
 
@@ -213,6 +227,15 @@ def _tab_order(check: Check, window: Window) -> None:
         "() => [document.documentElement.clientWidth, "
         "document.documentElement.clientHeight]"
     )
+    # The walk starts at the TOP of the document, not where the scenario
+    # left the focus: ended on the page's last control (a sort button),
+    # the first Tab left the document and "tabbing reaches something"
+    # went red on a sound page — measured on 2026-09-26, and blamed on an
+    # innocent ``ui.sidebar_footer`` first. ``blur()`` is not enough:
+    # Chrome keeps its starting point where the click landed. Focusing a
+    # marker at the head of ``<body>`` moves it; ``tabindex=-1`` keeps the
+    # marker itself out of the walk.
+    window.page.evaluate(_TAB_START_JS)
     for _ in range(20):
         window.press("Tab")
         focused = window.page.evaluate(_TAB_JS)
@@ -230,6 +253,9 @@ def _tab_order(check: Check, window: Window) -> None:
             or focused["y"] > vh
         ):
             offscreen.append(focused)
+    window.page.evaluate(
+        "() => document.getElementById('bz-probe-tab-start')?.remove()"
+    )
     check(
         f"[{window.name}] tabbing reaches something",
         reached,

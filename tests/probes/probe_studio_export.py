@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Probe — le code exporte par le theme studio est-il du Python QUI MARCHE ?
 
-Le bloc du bas de ``/theme-studio`` est la raison d'etre de la page : on
+Le bloc du bas de ``/studio`` (examples/showcase) est la raison d'etre de la page : on
 regle, on copie, on colle dans ``core/theme.py``. Il est produit par une
 EXPRESSION JavaScript (``export_expression()``), donc rien cote serveur
 ne voit jamais la chaine finale.
@@ -29,6 +29,7 @@ REGLAGES = {
     "selector": 0.05,
     "stroke": 2.0,
     "spacing": 0.3,
+    "font": "ui-serif, Georgia, serif",
 }
 
 ATTENDU_SHAPE = {"box": "1.5rem", "field": "0.25rem", "selector": "0.05rem"}
@@ -40,10 +41,10 @@ def main() -> int:
     from tests.audit.harness import audit_server, browser_context
 
     ecarts: list[str] = []
-    with audit_server() as base:
+    with audit_server("examples.showcase.main:app") as base:
         with browser_context() as ctx:
             page = ctx.new_page()
-            page.goto(f"{base}/theme-studio", wait_until="networkidle")
+            page.goto(f"{base}/studio", wait_until="networkidle")
             # Attendre l'ETAT, pas une duree. Un `wait_for_timeout` fixe
             # paye son plein tarif meme quand la page est prete en
             # 200 ms, et reste un pari perdant sur une machine chargee.
@@ -97,6 +98,8 @@ def main() -> int:
                     )
             if "--bz-stroke: 2px;" not in css:
                 ecarts.append("le trait regle a 2px n'est pas arrive")
+            if "--font-sans: ui-serif, Georgia, serif" not in css:
+                ecarts.append("la police reglee n'est pas arrivee")
             if "--spacing: 0.3rem" not in css:
                 ecarts.append("la densite reglee a 0.3rem n'est pas arrivee")
             # `rgb(...)` et non l'hexadecimal : le generateur normalise
@@ -116,7 +119,7 @@ def main() -> int:
             from bretzel.theme.palette import DEFAULT_SEMANTIC_LIGHT
 
             attendu_primary = DEFAULT_SEMANTIC_LIGHT["primary"]
-            page.get_by_role("button", name="Réinitialiser").click()
+            page.get_by_role("button", name="Reset to the shipped theme").click()
             try:
                 page.wait_for_function(
                     "(attendu) => $bz.state.Studio.default.primary === attendu",
@@ -151,7 +154,7 @@ def main() -> int:
         for e in ecarts:
             print("   ", e)
         return 1
-    print("\n  le code exporte se construit, et porte les 6 reglages")
+    print("\n  le code exporte se construit, et porte les 7 reglages")
     return 0
 
 

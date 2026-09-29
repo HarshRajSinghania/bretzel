@@ -41,7 +41,7 @@ from bretzel.components.base import Component, reactive_prop
 from bretzel.components.base._wiring import (
     coerce_index,
     hidden_carrier_attrs,
-    server_sync_marker,
+    scope_literal,
     theme_context,
 )
 from bretzel.components.base._wiring import (
@@ -93,105 +93,6 @@ def compute_range(
         [1, "ellipsis"]
         + list(range(start, start + middle))
         + ["ellipsis", total_pages]
-    )
-
-
-# ───────────────────────────────────────────────────────────────────────────
-# bz-data template — JS port of compute_range + setActive helper
-# ───────────────────────────────────────────────────────────────────────────
-
-
-def _build_bz_data(
-    *,
-    scope_key: str,
-    has_local_value: bool,
-    initial_value: int,
-    binding_path: str | None,
-    total_pages_expr: str,
-    max_visible_expr: str,
-    disabled_expr: str,
-    server_synced: bool,
-) -> str:
-    """The instance's ``bz-data``: **data, not code**.
-
-    The algorithm (``range`` / ``current`` / ``setActive`` / …) lives
-    once in ``$bz.pagination.scope``
-    (``bretzel/runtime/_src/15_pagination.js``). Here we emit only the
-    state and the configuration.
-
-    Before that switch, this builder serialised the full JS port of
-    ``compute_range`` into EVERY instance — 957 bytes, the repository's
-    biggest ``bz-data`` — with the config **baked into the method
-    bodies** (``totalPages() {{ return Math.max(1, +(10) || 1); }}``).
-    That is precisely what made factoring impossible: two paginations of
-    different sizes produced two different CODES instead of two states.
-
-    ``_read`` / ``_write`` cover both modes with the same scope methods —
-    the local ``value`` field or the store cell. No ``get value()``:
-    ``scope.absorb`` invokes each key at registration and would freeze
-    the getter (cf. traps.md).
-
-    ⚠️ ``disabled`` leaves as a **method override**, not as a field. The
-    "config as data" move (112fb527) had converted it to ``_disabled:
-    <expression>`` — yet a field is evaluated once, outside any effect,
-    and ``absorb`` wraps its snapshot in a signal decoupled from the
-    store: the binding was dead at mount. Only literals support the
-    field shape; a bound expression must live in a method body (same
-    mechanics as the Slider's ``_disabledState``).
-
-    ⚠️ ``_total`` / ``_maxVisible`` are fields AND must be **re-seeded**.
-    That is where the first fix stopped too early: "they are always
-    server-side literals, so real data" confuses LITERAL and CONSTANT.
-    They are literals that change at every server render — and
-    ``absorb`` NEVER rewrites an existing signal (``03_scope.js``,
-    "NEVER reset existing values"). Without declaring them in
-    ``_serverSync``, the page count and the window width stayed frozen
-    at their first mount's value, for life: the server returned 16, the
-    scope answered 20.
-
-    Contrast with ``value``: that one is re-seeded ONLY if the server
-    owns it, otherwise a neighbouring refresh would erase the client's
-    click. The server always owns the configuration; it only owns the
-    value if it comes from a state.
-    """
-    # The config is ALWAYS re-seedable; the value only when the server
-    # is its source.
-    sync_keys = ["_total", "_maxVisible"]
-    if has_local_value and server_synced:
-        sync_keys.insert(0, scope_key)
-    sync = server_sync_marker(*sync_keys, enabled=True)
-
-    if has_local_value:
-        state = f"{scope_key}: {initial_value},{sync} "
-        read_write = (
-            f"_read() {{ return this.{scope_key}; }},"
-            f"_write(v) {{ this.{scope_key} = v; }},"
-        )
-    else:
-        assert binding_path is not None
-        state = f"{sync.lstrip()} "
-        read_write = (
-            f"_read() {{ return {binding_path}; }},"
-            f"_write(v) {{ {binding_path} = v; }},"
-        )
-
-    # Overrides the slab's ``isDisabled() { return false; }`` constant
-    # only when the lock exists — a ``false`` literal has nothing more to
-    # say than the default.
-    disabled_override = (
-        f"isDisabled() {{ return !!({disabled_expr}); }},"
-        if disabled_expr != "false"
-        else ""
-    )
-
-    return (
-        "{...$bz.pagination.scope,"
-        + state
-        + read_write
-        + disabled_override
-        + f"_total: {total_pages_expr},"
-        + f"_maxVisible: {max_visible_expr}"
-        + "}"
     )
 
 
@@ -314,14 +215,10 @@ class Pagination(Component):
         initial_disabled = bool(self._reactive_values.get("disabled"))
 
         # Runtime expressions — the binding path when bound, a
-        # literal otherwise. ``value_binding_path`` is consumed by
-        # ``_build_bz_data`` to wire the active read / write target ;
-        # ⚠️ The other values leave as DATA (``_total`` /
-        # ``_maxVisible`` / ``_disabled``); the methods live once in
-        # ``$bz.pagination.scope`` and read ``this._total``. This comment
-        # announced the expression baked INTO the method body until
-        # 2026-08-01 — that is precisely the old shape ``_build_bz_data``
-        # describes as gone, just above.
+        # literal otherwise. The values leave as DATA (``_total`` /
+        # ``_maxVisible``); the algorithm (``range`` / ``current`` /
+        # ``setActive``…) lives once in ``$bz.pagination.scope``
+        # (``15_pagination.js``) and reads ``this._total``.
         value_binding_path = (
             self.path_of(value_binding) if value_binding is not None else None
         )
@@ -348,15 +245,27 @@ class Pagination(Component):
         value_expr = value_binding_path or scope_key
 
         # ── Build the bz-data state ──────────────────────────────────
-        bz_data = _build_bz_data(
-            scope_key=scope_key,
-            has_local_value=value_binding is None,
-            initial_value=initial_value,
+        #
+        # ⚠️ ``disabled`` leaves as a METHOD override, not a field: a
+        # field is evaluated once at mount, so a bound lock would be dead.
+        # A ``false`` literal has nothing more to say than the slab's
+        # ``isDisabled() { return false; }``.
+        #
+        # ``_total`` / ``_maxVisible`` are server config, re-seeded on
+        # every swap: they are literals that CHANGE at every server
+        # render (the server returned 16, the scope answered 20 before).
+        bz_data = scope_literal(
+            "$bz.pagination.scope",
+            cell=scope_key,
+            initial=json.dumps(initial_value),
             binding_path=value_binding_path,
-            total_pages_expr=total_pages_expr,
-            max_visible_expr=max_visible_expr,
-            disabled_expr=disabled_expr,
             server_synced=value_server_backed,
+            methods=(
+                [f"isDisabled() {{ return !!({disabled_expr}); }}"]
+                if disabled_expr != "false"
+                else []
+            ),
+            config={"_total": total_pages_expr, "_maxVisible": max_visible_expr},
         )
 
         # ── Static class composition ─────────────────────────────────

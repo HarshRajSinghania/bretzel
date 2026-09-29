@@ -1,17 +1,11 @@
 """kanban/tableau — the columns, the cards, and the activity feed.
 
-Two zones, and **how the two ``@refreshable`` lists are shared is this
-example's whole subject**:
+Two refreshable regions show changes to the current session's board:
 
 - ``deps=`` answers "what makes ME re-render" — the answer arrives in the
   response to my action, one round trip.
-- ``broadcast=`` answers "what must the OTHER windows redo" — an SSE
-  signal then their own request.
-
-The board is in both: I change it, and the others must see it. The
-filters are only in ``deps``: what I hide concerns only me, and
-broadcasting it would make everyone work again at every keystroke of a
-single person.
+The board and the filters are in ``deps``. This public demo uses
+``SessionState``, so one visitor does not change another's board.
 
 **The column that scrolls IS the drop zone**, not a container around it.
 Putting the ``dropzone`` inside the scrolling block would make its box
@@ -153,20 +147,13 @@ def colonne(cle: str, libelle: str, limite: int | None) -> None:
 def bande_archive() -> None:
     """The board's exit: a strip, under the columns.
 
-    ⚠️ **Its height is FIXED and its overflow cut**, and that is not
-    fussiness. The drag engine reparents the moved node into the hovered
-    zone — it is what makes the DOM order BE the result on drop. A zone
-    that lets itself be sized by what it hosts therefore grows by the
-    size of a card on hover, and pushes everything around it at the
-    precise moment one is aiming. Measured: the first version, set in the
-    banner, went from 104×32 to 362×105 and made the whole bar jump from
-    93 to 166 px.
-
-    Here the card received is simply cut off: what the reader watches
-    during the gesture is the preview under their pointer.
+    This is a terminal action, not a fifth column: the runtime reports a
+    drop to this zone without inserting a card into its fixed-height box.
+    The floating preview stays visible until release.
     """
     with ui.dropzone(
-        name=ZONE_ARCHIVE, accepts=[GROUPE], locked=True, on_move=archiver,
+        name=ZONE_ARCHIVE, accepts=[GROUPE], locked=True,
+        terminal=True, on_move=archiver,
         color="error",
         classes="flex-none h-14 min-h-0! overflow-hidden rounded-lg "
                 "border border-dashed border-text/20 flex items-center "
@@ -180,7 +167,7 @@ def bande_archive() -> None:
 
 @refreshable(deps=[Tableau, Filtres])
 def plateau() -> None:
-    """The four columns. Broadcast: what I drag, the others see."""
+    """The four columns of the current session's board."""
     with ui.vstack(gap="sm", classes="flex-1 min-h-0 min-w-0 p-4"):
         with ui.hstack(gap="md", align="stretch",
                        classes="flex-1 min-h-0 min-w-0 overflow-x-auto"):
@@ -191,12 +178,10 @@ def plateau() -> None:
 
 @refreshable(deps=[Tableau])
 def activite() -> None:
-    """The activity feed — the board's history, newest at the top.
+    """The current board's history, newest at the top.
 
-    It is this panel that makes the sharing VISIBLE: in the second
-    window, a line appears without anybody having touched it. Entries
-    already undone stay shown, set back — the stack is in front of the
-    cursor, it is not erased until something is rewritten.
+    Entries already undone stay shown, set back — the stack is in front
+    of the cursor, it is not erased until something is rewritten.
 
     ⚠️ **Unfolding the panel no longer goes through the server.** It
     lived in ``Vue`` (a server state), so folding a column cost a round

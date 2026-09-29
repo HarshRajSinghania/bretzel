@@ -41,7 +41,13 @@ TREE_THEME: dict[str, Any] = {
     "slots": {
         # Root <ul role="tree"> — flex column, no bullets, non-selectable
         # text (dragging a selection across a tree is never intended).
-        "root": "flex flex-col w-full text-text select-none",
+        # No ``w-full``: a block-level ``flex`` already fills a column or
+        # a block, and in an ``hstack`` the tree takes its nodes' width
+        # instead of the whole row — where ``w-full`` also fought a
+        # caller's ``classes="w-60"`` at equal specificity. Measured over
+        # the example apps on 2026-09-29: one tree in thirty changed, in
+        # a centred row, for the better.
+        "root": "flex flex-col text-text select-none",
         # Nested <ul role="group"> — same column, no extra chrome (the
         # indent lives on each row, not on the group).
         "group": "flex flex-col",
@@ -87,7 +93,9 @@ TREE_THEME: dict[str, Any] = {
         # Optional per-node leading icon.
         "icon": "shrink-0 text-muted",
         # Label — truncates rather than wrapping (rows stay one line).
-        "label": "truncate",
+        # ``min-w-0``: the ellipsis needs a bound, and it is no longer the
+        # root's ``w-full`` — the row's flex item must be allowed to give.
+        "label": "truncate min-w-0",
     },
     # Per-size : row padding + font, icon / chevron glyph size, the shared
     # indicator/spacer cell width, and the indent ``step`` (rem per depth

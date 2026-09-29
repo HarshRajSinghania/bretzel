@@ -68,7 +68,7 @@ from bretzel.components.base._wiring import (
     imperative_listeners,
     install_open_close_toggle,
     relocate_server_action,
-    server_sync_marker,
+    scope_literal,
     theme_context,
 )
 from bretzel.components.base._wiring import (
@@ -274,12 +274,12 @@ class Select(Component):
         # the form.
         derived_name = self._derive_field_name()  # reused by value_server_backed below
         name = self._reactive_values.get("name") or derived_name
-        if value_binding is not None:
-            # V3 read/write path the trigger reads + the option click
-            # writes : full ``$bz.state.<path>`` form.
-            value_expr = value_binding.binding_path()
-        else:
-            value_expr = "value"  # local bz-data scope ; see below
+        # The path the trigger reads and the option click writes: the
+        # full ``$bz.state.<path>`` when bound, the local scope field
+        # otherwise.
+        value_expr = (
+            value_binding.binding_path() if value_binding is not None else "value"
+        )
 
         initial_value = self._reactive_values.get("value")
         # ``_serverSync`` re-adopts ``value`` from the server on a
@@ -291,8 +291,8 @@ class Select(Component):
         # is purely client-side ; re-adopting the static SSR initial on
         # every swap would WIPE the user's pick whenever an unrelated
         # handler refreshes the surrounding section. Gate on the stamp so
-        # the client keeps its pick. (Binding mode never emits
-        # ``_serverSync`` — value lives in ``$bz._store``, patched by the
+        # the client keeps its pick. (Binding mode never lists the value
+        # in ``_serverSync`` — it lives in ``$bz._store``, patched by the
         # envelope.)
         # ⚠️ NOT ``derived_name``: the autoname answers "where does my
         # HTML name= come from", not "where does my value come from".
@@ -766,7 +766,7 @@ class Select(Component):
                 # listener sees it) whenever the value mutates. It's the
                 # Select's SINGLE change dispatcher. It must NOT fire on a
                 # SERVER re-adoption : an unbound select dodges that by not
-                # emitting ``_serverSync`` (cf. ``_build_bz_data_*``).
+                # listing its value in ``_serverSync`` (cf. ``scope_literal``).
                 "bz-effect": _change_emit_effect(value_directive),
             }
             effective_name = name or (
@@ -785,47 +785,33 @@ class Select(Component):
         root_attrs["class"] = self.compose_class(
             "root", apply_variant_size_modifiers=False,
         )
-        # bz-data : open flag + keyboard highlight + baked option
-        # list + mode-aware methods. Multi mode adds pills support
-        # (_picked / _togglePick / _selectAll / _clearAll) ; single
-        # keeps the lean single-pick API.
-        #
-        # ⚠️ Two scope rules drive the method shapes :
-        # - ``scope.absorb`` invokes ``decl[key]`` at registration, so
-        #   any ``get foo(){…}`` freezes to a constant — every getter is
-        #   a flat method here.
-        # - bare identifiers inside a method body do NOT auto-scope to
-        #   ``this`` — always go through ``this.<field>`` for local
-        #   state ; binding writes go to the full ``$bz.state.<path>``.
         options_js = json.dumps(
             [str(v) for v, _, _ in normalised], ensure_ascii=False
         )
-        # ``write_in_method`` is the method-context path : ``this.value``
-        # for the local field, full ``$bz.state.<path>`` for a binding.
-        if value_binding is not None:
-            write_in_method = value_expr  # full path works anywhere
-        else:
-            write_in_method = "this.value"
-
+        # The methods live ONCE in ``$bz.select.single`` / ``.multi``
+        # (``13_select.js``); this instance emits only its data. Single
+        # holds a scalar, multi an array (read back through ``_value()``
+        # / ``_picked()`` — the factory null-guards a bound ``null`` to
+        # ``[]``).
+        #
+        # ``_options`` / ``_labels`` are server config: a select reloaded
+        # from the database at every refresh must not keep its first
+        # list, nor the label map that travels with it.
         if is_multi:
-            bz_data = self._build_bz_data_multi(
-                value_binding=value_binding,
-                write=write_in_method,
-                initial_value=initial_value,
-                options_js=options_js,
-                labels_js=labels_js,
-                server_backed=value_server_backed,
-            )
+            initial_js = json.dumps(self._normalise_multi_initial(initial_value))
         else:
-            bz_data = self._build_bz_data_single(
-                value_binding=value_binding,
-                value_expr=value_expr,
-                write=write_in_method,
-                initial_value=initial_value,
-                options_js=options_js,
-                labels_js=labels_js,
-                server_backed=value_server_backed,
+            initial_js = json.dumps(
+                "" if initial_value is None else str(initial_value)
             )
+        bz_data = scope_literal(
+            "$bz.select.multi" if is_multi else "$bz.select.single",
+            cell="value",
+            initial=initial_js,
+            binding_path=value_expr if value_binding is not None else None,
+            server_synced=value_server_backed,
+            fields={"open": "false", "_highlight": "-1"},
+            config={"_options": options_js, "_labels": labels_js},
+        )
         root_attrs["bz-data"] = bz_data
 
         # ── Root wiring : open/close dispatch + dismiss + imperative ──
@@ -915,147 +901,6 @@ class Select(Component):
         if initial_value:
             return [str(initial_value)]
         return []
-
-    def _build_bz_data_single(
-        self,
-        *,
-        value_binding: Any,
-        value_expr: str,
-        write: str,
-        initial_value: Any,
-        options_js: str,
-        labels_js: str,
-        server_backed: bool,
-    ) -> str:
-        """Single-mode bz-data — open flag + highlight + scalar
-        pick/select methods. The methods only ``_write`` the value ;
-        ``change`` is dispatched by the hidden input's
-        ``_change_emit_effect``, not by the scope.
-
-        The read site uses ``read`` (``this.value`` for the local field,
-        full ``$bz.state.<path>`` for a binding) so the two cases collapse
-        into one templated object literal — same split the multi builder
-        uses."""
-        # Methods live ONCE in ``$bz.select.single`` (13_select.js) ;
-        # this instance emits only its data + ``_read``/``_write``.
-        # ``_options`` stays per-instance. ``_read``/``_write`` (helpers,
-        # not frozen) point the shared methods at the value cell —
-        # local: a ``value`` field ; binding: ``$bz.state.<path>``. No
-        # ``get value()`` (scope.absorb freezes getters) ; the label /
-        # hidden input read ``value_expr`` directly.
-        if value_binding is None:
-            initial_js = json.dumps(
-                "" if initial_value is None else str(initial_value)
-            )
-            # ``_serverSync`` adopts ``value`` from the server on a
-            # @refreshable swap — ONLY when the value is server-backed
-            # (``value=server_state.field``). An unbound / literal select
-            # owns its value client-side : re-adopting the SSR initial on
-            # every swap would wipe the user's pick (cf. render()).
-            # The options list is server-owned CONFIG: the client never
-            # writes it, and it does change for real (a select reloaded
-            # from the database at every refresh). Re-seeded
-            # UNCONDITIONALLY — otherwise it stays frozen at the first
-            # mount's, for life. The VALUE, for its part, stays gated.
-            # ``_labels`` travels WITH ``_options`` — same owner, same
-            # reason. It joined the scope on 2026-08-28, when the
-            # trigger's two expressions stopped inlining the WHOLE map
-            # each on their own. Syncing it is not a detail: a
-            # non-reseeded map would leave the label stale after a
-            # refresh that changes the options, while the inlined
-            # attribute did re-render.
-            _keys = (["value", "_options", "_labels"] if server_backed
-                     else ["_options", "_labels"])
-            sync_marker = server_sync_marker(*_keys, enabled=True)
-            value_field = f"value: {initial_js},{sync_marker}"
-            read_write = (
-                "_read() { return this.value; },"
-                "_write(v) { this.value = v; },"
-            )
-        else:
-            value_field = ""
-            read_write = (
-                f"_read() {{ return {write}; }},"
-                f"_write(v) {{ {write} = v; }},"
-            )
-
-        return (
-            "{...$bz.select.single,"
-            + value_field
-            + read_write
-            + "open: false, _highlight: -1,"
-            + f"_options: {options_js},"
-            + f"_labels: {labels_js}"
-            + "}"
-        )
-
-    def _build_bz_data_multi(
-        self,
-        *,
-        value_binding: Any,
-        write: str,
-        initial_value: Any,
-        options_js: str,
-        labels_js: str,
-        server_backed: bool,
-    ) -> str:
-        """Multi-mode bz-data — pills support, bulk actions, array
-        membership semantics. Mirrors the Combobox multi methods
-        minus the search/filter logic (no _norm / _tokens / _matches
-        — all options always visible).
-
-        ⚠️ ``value`` is exposed as a flat ``_value()`` method, not a
-        getter (a getter would freeze at registration). All read sites
-        call ``_value()`` / ``_picked()``."""
-        # Methods live ONCE in ``$bz.select.multi`` (13_select.js) ; this
-        # instance emits its data (``_options`` + ``_labels``) +
-        # ``_read``/``_write`` pointing at the value cell (local: a
-        # ``value`` array field ; binding: ``$bz.state.<path>``, read
-        # raw — the factory's ``_value`` null-guards to []).
-        initial_js = json.dumps(
-            self._normalise_multi_initial(initial_value)
-        )
-
-        if value_binding is None:
-            # ``_serverSync`` adopts ``value`` from the server on a
-            # @refreshable swap — ONLY when server-backed (same rule as
-            # single mode ; an unbound multi keeps its client picks).
-            # The options list is server-owned CONFIG: the client never
-            # writes it, and it does change for real (a select reloaded
-            # from the database at every refresh). Re-seeded
-            # UNCONDITIONALLY — otherwise it stays frozen at the first
-            # mount's, for life. The VALUE, for its part, stays gated.
-            # ``_labels`` travels WITH ``_options`` — same owner, same
-            # reason. It joined the scope on 2026-08-28, when the
-            # trigger's two expressions stopped inlining the WHOLE map
-            # each on their own. Syncing it is not a detail: a
-            # non-reseeded map would leave the label stale after a
-            # refresh that changes the options, while the inlined
-            # attribute did re-render.
-            _keys = (["value", "_options", "_labels"] if server_backed
-                     else ["_options", "_labels"])
-            sync_marker = server_sync_marker(*_keys, enabled=True)
-            value_field = f"value: {initial_js},{sync_marker}"
-            read_write = (
-                "_read() { return this.value; },"
-                "_write(v) { this.value = v; },"
-            )
-        else:
-            value_field = ""
-            read_write = (
-                f"_read() {{ return {write}; }},"
-                f"_write(v) {{ {write} = v; }},"
-            )
-
-        return (
-            "{...$bz.select.multi,"
-            + value_field
-            + read_write
-            + "open: false, _highlight: -1,"
-            + f"_options: {options_js},"
-            + f"_labels: {labels_js}"
-            + "}"
-        )
 
 
 __all__ = ["Select"]

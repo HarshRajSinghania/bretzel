@@ -77,10 +77,9 @@ def _framework_modules_with_all() -> dict[str, tuple[str, ...]]:
         if not info.ispkg:
             continue
         name = f"bretzel.{info.name}"
-        try:
-            module = importlib.import_module(name)
-        except Exception:  # pragma: no cover — un module cassé a sa propre gate
-            continue
+        # Pas de ``try`` : un paquet qui ne s'importe plus doit rougir ICI,
+        # pas sortir de la liste des modules à classer.
+        module = importlib.import_module(name)
         exported = getattr(module, "__all__", None)
         if exported:
             found[name] = tuple(exported)

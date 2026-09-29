@@ -7,7 +7,28 @@ change between alpha releases.
 
 ## [Unreleased]
 
+## [0.1.0a2] - 2026-09-29
+
+### Added
+
+- A public component gallery, `examples/showcase` (live at
+  <https://ui.bretzel-py.dev>): one page per component with realistic uses and
+  their code, eight ready-made identities and a theme studio that exports the
+  `Theme(...)` to paste.
+- `ui.icon_button(href=…, external=…)` renders a link, like `ui.button`.
+- Charts fill their container by default; `width=` is now a maximum.
+
 ### Changed
+
+- Frame widths (sidebar, drawer, notification stack) are written in `rem`: they
+  no longer shrink with the control density.
+- The sidebar's rows sit closer, its groups further apart; its focus ring is
+  drawn inside the row.
+- Calendar weekday headers use one letter (the full name is in `title`) so they
+  fit at every size and density.
+- The chart series palette starts with the brand pair (`primary`, `secondary`).
+- A link attribute (`href`, `target`, `rel`, `download`) passed to a component
+  that does not render a link now raises instead of rendering inert HTML.
 
 - User-facing API, CLI output, diagnostics and error pages are now in English.
 - Public documentation entry points, the core documentation path and the
@@ -18,6 +39,21 @@ change between alpha releases.
 - The README quickstart and the playground theme defaults.
 - Test collection on a clean CI environment for every supported Python.
 - The atelier example initializes its schema before importing its features.
+- A form's whole-instance validators see the submission as one batch: two
+  identical passwords were reported different after a previous mismatch.
+- A refused submission with no other change now re-renders the form, so its
+  messages appear (the action answered `204` before).
+- An unbound, unnamed `ui.radio_group` gives its radios a common name, so they
+  exclude each other again.
+- A handler parameter annotated `int`, `bool`… receives that type.
+- A client expression with quotes in `ui.icon(name=…)` no longer breaks the
+  page's runtime scan.
+- A dismissed badge inside a refreshed loop reappears when the server renders
+  it again.
+- The switch thumb is centred at any density; table headers follow their
+  column's alignment; a carousel showing several cards no longer overflows;
+  `ui.file_upload(variant="button")` no longer stretches; `ui.title` follows a
+  zone refreshed by an action.
 
 ## [0.1.0a1] - 2026-09-15
 

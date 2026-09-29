@@ -184,6 +184,12 @@
       const cfg = config[path] || {};
       if (cfg.send_to_server === false) continue;
       for (const field of Object.keys(fields)) {
+        // A field with no value says nothing — its signal was created
+        // by a read (`get` auto-creates) and never seeded. Sent, it
+        // would put the WORD "undefined" in the body: stored as is in a
+        // text field, refused by a bool one. Left out, the server keeps
+        // its own value, as hydration only writes the fields present.
+        if (fields[field] === undefined) continue;
         detail.parameters[path + "." + field] = wireValue(fields[field]);
       }
     }
@@ -506,6 +512,15 @@
        * difference and re-ship. */
       const xhr = e.detail && e.detail.xhr;
       if (!xhr || !xhr.getResponseHeader) return;
+
+      /* A navigation starts a new page, with a fresh page state and its
+       * own id (``render_context.py``). Adopt it: the actions that follow
+       * must speak for the page SHOWN, not the one left — otherwise they
+       * would find the old page's state again, the very defect the new
+       * id closes. */
+      const pageId = xhr.getResponseHeader("X-Bretzel-Page-ID");
+      if (pageId) $bz._pageId = pageId;
+
       const brut = xhr.getResponseHeader("X-Bretzel-Zone-Hashes");
       if (!brut) return;
       $bz._zoneHashes = $bz._zoneHashes || {};
@@ -515,6 +530,15 @@
           $bz._zoneHashes[morceau.slice(0, coupe)] = morceau.slice(coupe + 1);
         }
       }
+    });
+
+    /* A partial response has no <head>: its page title arrives in
+     * ``HX-Trigger`` (``render/pipeline.py``), after every partial
+     * navigation — a boosted link, a sidebar item, a ``redirect()``.
+     * htmx dispatches a string value as ``detail.value``. */
+    document.body.addEventListener("__TITLE_EVENT__", function (e) {
+      const title = e.detail && e.detail.value;
+      if (typeof title === "string") document.title = title;
     });
 
     document.body.addEventListener("htmx:responseError", function (e) {

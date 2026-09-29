@@ -77,7 +77,7 @@ from __future__ import annotations
 import ast
 import collections
 
-from bretzel.lint.corpus import Module
+from bretzel.lint.corpus import Module, catalogue
 from bretzel.lint.report import Finding
 
 RULE = "mixed-sizes"
@@ -95,10 +95,10 @@ def _judged() -> dict[str, str]:
     """
     from bretzel.components import ui as ui_ns
     from bretzel.components.base.component import Component
-    from bretzel.introspect import ComponentInfo, describe_components
+    from bretzel.introspect import ComponentInfo
 
     out: dict[str, str] = {}
-    for info in describe_components():
+    for info in catalogue().values():
         if not isinstance(info, ComponentInfo):
             continue
         if info.family != "inputs" or not info.size_values:
@@ -140,31 +140,48 @@ def _resolved_size(call: ast.Call, ui_name: str, defaults: dict[str, str]) -> st
     return defaults.get(ui_name)
 
 
-def _controls_under(
-    node: ast.AST, judged: dict[str, str]
+def _opens_a_row(node: ast.AST) -> bool:
+    """``with ui.hstack(...):`` — a nested row, whose BODY is another group.
+
+    The ``Call`` check above only sees ``ui.hstack(...)`` as an expression;
+    written as a ``with``, the container is an ``ast.With`` whose
+    ``_ui_name`` is ``None``, and its body was swept as part of the row
+    above. Measured on the cockpit's atelier (2026-09-27): a textarea and
+    the file picker in the ``hstack`` UNDER it were judged neighbours.
+    """
+    return isinstance(node, ast.With) and any(
+        _ui_name(item.context_expr) in _ROW_CONTAINERS for item in node.items
+    )
+
+
+def _controls_in(
+    nodes: list[ast.AST], judged: dict[str, str]
 ) -> list[tuple[ast.Call, str]]:
     """THIS neighbourhood's controls — without descending into a nested
-    container, which is another row and therefore another group."""
+    container, which is another row and therefore another group.
+
+    Takes the row's BODY, and judges each statement of it before looking
+    inside. It used to be called on each statement and to look only at
+    its CHILDREN: a ``with ui.hstack():`` written directly in a row's
+    body was never itself recognised as a row, so its fields were counted
+    as the outer row's neighbours — the message's own promise (« a nested
+    container is another neighbourhood ») broken on its simplest case.
+    """
     found: list[tuple[ast.Call, str]] = []
-    for child in ast.iter_child_nodes(node):
-        name = _ui_name(child)
+    for node in nodes:
+        name = _ui_name(node)
         if name in judged:
-            found.append((child, name))  # type: ignore[arg-type]
+            found.append((node, name))  # type: ignore[arg-type]
             continue
-        if name in _ROW_CONTAINERS:
+        if name in _ROW_CONTAINERS or _opens_a_row(node):
             continue
-        found.extend(_controls_under(child, judged))
+        found.extend(_controls_in(list(ast.iter_child_nodes(node)), judged))
     return found
 
 
 def check(module: Module) -> list[Finding]:
     """One finding per neighbourhood whose controls do not agree."""
-    rows = [
-        node
-        for node in ast.walk(module.tree)
-        if isinstance(node, ast.With)
-        and any(_ui_name(item.context_expr) in _ROW_CONTAINERS for item in node.items)
-    ]
+    rows = [node for node in module.nodes if _opens_a_row(node)]
     if not rows:
         return []
 
@@ -172,7 +189,7 @@ def check(module: Module) -> list[Finding]:
     findings: list[Finding] = []
 
     for row in rows:
-        found = [c for stmt in row.body for c in _controls_under(stmt, judged)]
+        found = _controls_in(list(row.body), judged)
         sized = [
             (call, name, size)
             for call, name in found

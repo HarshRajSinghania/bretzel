@@ -153,8 +153,8 @@ event name) ; the playground cards show the live preview button itself.
    manquait : elle s'adresse à une page de COMPOSANT, c'est-à-dire une
    page dont le nom est celui d'un `ui.*`. Les neuf autres du corpus
    n'ont rien à prévisualiser et sont hors périmètre — l'infrastructure
-   du playground (`home`, `app_map`, `inspection`, `meta`,
-   `theme_studio`), les pages de FAMILLE qui montrent plusieurs
+   du playground (`home`, `app_map`, `inspection`, `meta` ; le
+   `theme_studio` est parti dans `examples/showcase`), les pages de FAMILLE qui montrent plusieurs
    composants en relation (`stack`, `dnd`, `screen`), et `notification`,
    qui est un helper qu'on déclenche et non un composant qu'on rend.
    L'audit du 2026-09-06 comptait six pages sans ces helpers ; les six

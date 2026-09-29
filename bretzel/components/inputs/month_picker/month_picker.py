@@ -37,6 +37,7 @@ from bretzel.components.base._wiring import (
     install_open_close_toggle,
     install_value_commands,
 )
+from bretzel.components.inputs._checkable import sized_slot
 from bretzel.components.inputs._picker_field import render_calendar_field, value_expr
 from bretzel.components.inputs.month_picker.theme import MONTH_PICKER_THEME
 from bretzel.core.tree import Element
@@ -189,7 +190,7 @@ class MonthPicker(Component):
         cal_kwargs["on_change"] = "; ".join(picked)
 
         def sized(slot: str) -> str:
-            return self.slot_class(slot, size_cfg.get(slot, ""))
+            return sized_slot(self, slot, size_cfg)
 
         return render_calendar_field(
             self,

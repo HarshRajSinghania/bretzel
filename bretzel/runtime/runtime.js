@@ -229,6 +229,37 @@
   }
   $bz._refetchZone = refetchZone;
 
+  /* When EventSource GIVES UP. It retries a dropped stream by itself,
+   * but a retry answered with anything other than a 200
+   * ``text/event-stream`` — the 502 a proxy returns while the app
+   * restarts — closes it for good (``readyState === CLOSED``, per the
+   * spec). Measured on 2026-09-26 on the public demo behind Cloudflare:
+   * the container's scheduled restart left every open tab deaf to
+   * realtime until a reload. So we reopen it ourselves, doubling the
+   * delay from 1 s to 30 s; a successful ``open`` resets it.
+   *
+   * ``_sseWasDown``: whatever was broadcast during the gap is lost — the
+   * broker does not replay. On the ``open`` that ends a gap, every
+   * subscribed zone refetches once, through the same coalescing window
+   * as a ``state-dirty``. */
+  const SSE_RETRY_MIN_MS = 1000;
+  const SSE_RETRY_MAX_MS = 30000;
+  let _sseRetryMs = SSE_RETRY_MIN_MS;
+  let _sseWasDown = false;
+
+  function refetchSubscribedZones(qualname) {
+    for (const zone of document.querySelectorAll("[data-bz-subscribe-state]")) {
+      // A broadcast zone lists ALL its deps (space-separated) ; refetch
+      // when the dirtied state is one of them.
+      if (qualname !== undefined) {
+        const states = zone.getAttribute("data-bz-subscribe-state").split(" ");
+        if (!states.includes(qualname)) continue;
+      }
+      const url = zone.getAttribute("data-bz-subscribe-url");
+      if (url && window.htmx) refetchZone(zone, url);
+    }
+  }
+
   function ensureSse() {
     if (_sseSource || !_sseUrl) return;
     if (!document.querySelector("[data-bz-subscribe-state]")) return;
@@ -240,23 +271,27 @@
     // EventSource auto-reconnects and fires ``open`` again.
     $bz._persistence.register("LiveConnection.default", "memory");
     $bz._store.set("LiveConnection.default.connected", false);
-    _sseSource = new EventSource(_sseUrl);
-    _sseSource.addEventListener("open", function () {
+    const source = new EventSource(_sseUrl);
+    _sseSource = source;
+    source.addEventListener("open", function () {
       $bz._store.set("LiveConnection.default.connected", true);
-    });
-    _sseSource.addEventListener("error", function () {
-      $bz._store.set("LiveConnection.default.connected", false);
-    });
-    _sseSource.addEventListener("state-dirty", function (event) {
-      const qualname = event.data;
-      for (const zone of document.querySelectorAll("[data-bz-subscribe-state]")) {
-        // A broadcast zone lists ALL its deps (space-separated) ; refetch
-        // when the dirtied state is one of them.
-        const states = zone.getAttribute("data-bz-subscribe-state").split(" ");
-        if (!states.includes(qualname)) continue;
-        const url = zone.getAttribute("data-bz-subscribe-url");
-        if (url && window.htmx) refetchZone(zone, url);
+      _sseRetryMs = SSE_RETRY_MIN_MS;
+      if (_sseWasDown) {
+        _sseWasDown = false;
+        refetchSubscribedZones();
       }
+    });
+    source.addEventListener("error", function () {
+      $bz._store.set("LiveConnection.default.connected", false);
+      _sseWasDown = true;
+      if (source.readyState !== EventSource.CLOSED) return;
+      source.close();
+      if (_sseSource === source) _sseSource = null;
+      setTimeout(ensureSse, _sseRetryMs);
+      _sseRetryMs = Math.min(_sseRetryMs * 2, SSE_RETRY_MAX_MS);
+    });
+    source.addEventListener("state-dirty", function (event) {
+      refetchSubscribedZones(event.data);
     });
   }
   $bz._ensureSse = ensureSse;
@@ -1857,6 +1892,12 @@
       const cfg = config[path] || {};
       if (cfg.send_to_server === false) continue;
       for (const field of Object.keys(fields)) {
+        // A field with no value says nothing — its signal was created
+        // by a read (`get` auto-creates) and never seeded. Sent, it
+        // would put the WORD "undefined" in the body: stored as is in a
+        // text field, refused by a bool one. Left out, the server keeps
+        // its own value, as hydration only writes the fields present.
+        if (fields[field] === undefined) continue;
         detail.parameters[path + "." + field] = wireValue(fields[field]);
       }
     }
@@ -2179,6 +2220,15 @@
        * difference and re-ship. */
       const xhr = e.detail && e.detail.xhr;
       if (!xhr || !xhr.getResponseHeader) return;
+
+      /* A navigation starts a new page, with a fresh page state and its
+       * own id (``render_context.py``). Adopt it: the actions that follow
+       * must speak for the page SHOWN, not the one left — otherwise they
+       * would find the old page's state again, the very defect the new
+       * id closes. */
+      const pageId = xhr.getResponseHeader("X-Bretzel-Page-ID");
+      if (pageId) $bz._pageId = pageId;
+
       const brut = xhr.getResponseHeader("X-Bretzel-Zone-Hashes");
       if (!brut) return;
       $bz._zoneHashes = $bz._zoneHashes || {};
@@ -2188,6 +2238,15 @@
           $bz._zoneHashes[morceau.slice(0, coupe)] = morceau.slice(coupe + 1);
         }
       }
+    });
+
+    /* A partial response has no <head>: its page title arrives in
+     * ``HX-Trigger`` (``render/pipeline.py``), after every partial
+     * navigation — a boosted link, a sidebar item, a ``redirect()``.
+     * htmx dispatches a string value as ``detail.value``. */
+    document.body.addEventListener("bretzel:title", function (e) {
+      const title = e.detail && e.detail.value;
+      if (typeof title === "string") document.title = title;
     });
 
     document.body.addEventListener("htmx:responseError", function (e) {
@@ -2799,8 +2858,15 @@
  *   $bz.locale.tag()            the current tag ("fr", "en"…)
  *   $bz.locale.monthNames()     12 long names, January first
  *   $bz.locale.monthName(i)     a single one, 0-indexed
- *   $bz.locale.weekdayNames()     7 short names, SUNDAY first
+ *   $bz.locale.weekdayNames()     7 NARROW names ("M", "T"…), SUNDAY first
  *   $bz.locale.weekdayLongNames() the same in full, for a ``title=``
+ *
+ * ⚠️ NARROW, not short: the calendar's column is written in density
+ * steps and its text in text steps, and only the first follows
+ * ``--spacing``. "Wed" / "mer." overflowed their column at three of the
+ * five sizes at the DEFAULT density (measured on 2026-09-29, "LUN.MAR."
+ * stuck together) and at all five at 2.4 px a step. One letter fits any
+ * step; the full name rides the column's ``title=``.
  *
  * ⚠️ Sunday first, always: it is ``Date.getDay()``'s order, and it is
  * the component that rotates the list according to ``weekstart``. A list
@@ -2820,6 +2886,7 @@
     "July", "August", "September", "October", "November", "December",
   ];
   const FALLBACK_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const FALLBACK_NARROW = FALLBACK_WEEKDAYS.map(function (d) { return d[0]; });
 
   // 2023-01-01 IS a Sunday, and 2023 has twelve months — the two
   // anchors we need. Everything is computed in UTC: building these dates
@@ -2839,7 +2906,7 @@
         timeZone: "UTC",
       });
       const weekday = new Intl.DateTimeFormat(tag, {
-        weekday: "short",
+        weekday: "narrow",
         timeZone: "UTC",
       });
       // The FULL name, for the column headers' ``title=``. Same memo,
@@ -2861,13 +2928,11 @@
         }),
       };
     } catch (e) {
-      // The fallback has ONLY abbreviations. ``weekdaysLong`` is
-      // therefore the same thing there: a ``title`` identical to the
-      // visible text is useless but never wrong, where inventing a full
-      // name would be.
+      // The fallback has no full names: the abbreviation is the
+      // longest thing it knows, so it is what the ``title`` carries.
       entry = {
         months: FALLBACK_MONTHS,
-        weekdays: FALLBACK_WEEKDAYS,
+        weekdays: FALLBACK_NARROW,
         weekdaysLong: FALLBACK_WEEKDAYS,
       };
     }
@@ -3935,6 +4000,41 @@
         return (file.type || '').startsWith('image/');
     }
 
+    // A pasted screenshot reaches the page as ``image.png`` — every one
+    // of them: three captures pasted would be three files of the same
+    // name. It is renamed after the moment it was pasted; a real file
+    // copied from the file manager keeps its own name.
+    const GENERIC_PASTE_NAME = /^image\.(\w+)$/i;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function pastedName(file, stamp, index) {
+        const found = GENERIC_PASTE_NAME.exec(file.name || 'image.png');
+        if (!found) return file.name;
+        return 'pasted-' + stamp + (index ? '-' + (index + 1) : '') +
+            '.' + found[1].toLowerCase();
+    }
+
+    // The files a paste carries, or none. ``text/plain`` among the types
+    // means the paste is TEXT that happens to come with a picture — Excel
+    // cells and Word paragraphs both put a rendering of themselves on the
+    // clipboard: the text must land in the field, and nothing be joined.
+    function filesOfPaste(data) {
+        if (!data || !data.files || data.files.length === 0) return [];
+        const types = Array.from(data.types || []);
+        if (types.indexOf('text/plain') !== -1) return [];
+        const now = new Date();
+        const stamp = now.getFullYear() + pad(now.getMonth() + 1) +
+            pad(now.getDate()) + '-' + pad(now.getHours()) +
+            pad(now.getMinutes()) + pad(now.getSeconds());
+        return Array.from(data.files).map((file, i) => {
+            const name = pastedName(file, stamp, i);
+            return name === file.name ? file : new File([file], name, {
+                type: file.type, lastModified: file.lastModified,
+            });
+        });
+    }
+
     function makeScope(opts) {
         const acceptList = opts.accept
             ? String(opts.accept).split(',').map((s) => s.trim()).filter(Boolean)
@@ -4184,6 +4284,36 @@
                 return false;
             },
 
+            // ── Paste (``paste=True``) ─────────────────────────────
+            // Called from the root's ``bz-init``, so ``this`` is the
+            // reactive scope. The listener sits on the enclosing
+            // ``<form>`` — a paste fires on the FOCUSED element, and the
+            // one focused is the field the person writes in, not the
+            // picker — or on the root when there is no form. A paste
+            // that carries files adds them as a pick would; one that
+            // carries text is left to the field (``filesOfPaste``).
+            // No unmount hook in V3 (cf. above): a root that has left
+            // the DOM — a zone redrawn — unsubscribes at its next paste.
+            watchPaste() {
+                const self = this;
+                const root = self._el;
+                if (!root) return;
+                const host = root.closest('form') || root;
+                function onPaste(evt) {
+                    if (!root.isConnected) {
+                        host.removeEventListener('paste', onPaste);
+                        return;
+                    }
+                    const native = root.querySelector('input[type=file]');
+                    if (native && native.disabled) return;
+                    const pasted = filesOfPaste(evt.clipboardData);
+                    if (pasted.length === 0) return;
+                    evt.preventDefault();
+                    self.handleFiles(pasted);
+                }
+                host.addEventListener('paste', onPaste);
+            },
+
             // ── Browse-trigger click (delegated to native input) ──
             openPicker() {
                 const native = this._el && this._el.querySelector('input[type=file]');
@@ -4258,7 +4388,9 @@
         };
     }
 
-    window.$bz.fileUpload = { makeScope: makeScope, formatSize: formatSize };
+    window.$bz.fileUpload = {
+        makeScope: makeScope, formatSize: formatSize, filesOfPaste: filesOfPaste,
+    };
 })();
 
 
@@ -5643,10 +5775,16 @@
       _enabled() {
         return true;
       },
-      _show() {
+      _show(root) {
         if (!this._enabled()) return;
+        // A tooltip on a popup trigger must not cover the opened panel.
+        // Select, combobox, dropdown and other triggers expose this state
+        // through aria-expanded. Check again after the delay: the popup
+        // may open between focusin/mouseenter and the timer firing.
+        if (root && root.querySelector('[aria-expanded="true"]')) return;
         clearTimeout(this._t);
         this._t = setTimeout(() => {
+          if (root && root.querySelector('[aria-expanded="true"]')) return;
           this.open = true;
         }, this._delay);
       },
@@ -6112,6 +6250,7 @@
  *
  * DOM contract expected from Python (no new `bz-*` directive):
  *   zone : data-bz-dropzone="<name>"  data-bz-accepts="a,b"  [data-bz-locked]
+ *          [data-bz-terminal] (action target, never an in-flow destination)
  *          + a hidden carrier [data-bz-move-carrier] holding the hx-post
  *   item : data-bz-draggable  data-bz-key="…"  [data-bz-group] [data-bz-disabled]
  *          [data-bz-handle]  → when present, only [data-bz-drag-handle] grabs
@@ -6514,24 +6653,31 @@
   function hoverTo(x, y) {
     const under = document.elementFromPoint(x, y);
     if (!under) {
-      if (active.preview) active.preview.style.visibility = "";
+      active.terminalZone = null;
+      clearReplace();
       return;
     }
     const overZone = zoneOf(under);
     if (!overZone) {
-      if (active.preview) active.preview.style.visibility = "";
+      active.terminalZone = null;
+      clearReplace();
       return;
     }
-    //: A trash zone is a terminal action, not a destination to inspect.
-    //: The source card is still temporarily reparented there so `finish()`
-    //: can report the target, but showing its floating clone over the bin
-    //: makes it read as a second card.  Hide that clone while the pointer is
-    //: above any locked zone; reveal it immediately when it leaves again.
-    if (active.preview) {
-      active.preview.style.visibility = overZone.hasAttribute("data-bz-locked")
-        ? "hidden" : "";
+    if (!canEnter(overZone, active.group, active.originZone)) {
+      active.terminalZone = null;
+      clearReplace();
+      return;
     }
-    if (!canEnter(overZone, active.group, active.originZone)) return;
+
+    //: Archive/delete targets receive a Move, but never the real node.
+    //: Inserting into a clipped, fixed-height target made the card vanish
+    //: while its box still occupied space. Leave its layout untouched.
+    if (overZone.hasAttribute("data-bz-terminal")) {
+      clearReplace();
+      active.terminalZone = overZone;
+      return;
+    }
+    active.terminalZone = null;
 
     /* ⚠️ OVERWRITE. A zone that holds only one element and already
        carries one must receive NOTHING during the gesture: sliding the
@@ -6681,8 +6827,9 @@
     //: the mark, not from the position. Its index is 0 — a zone with one
     //: element has no other.
     const remplace = a.replaceZone;
-    const toZone = remplace || zoneOf(a.item);
-    const toIndex = remplace ? 0 : indexOf(a.item);
+    const terminal = a.terminalZone;
+    const toZone = terminal || remplace || zoneOf(a.item);
+    const toIndex = terminal || remplace ? 0 : indexOf(a.item);
     const origin = {parent: a.originParent, next: a.originNext, item: a.item};
     cleanup();
     if (!toZone) return;

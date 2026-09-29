@@ -79,7 +79,7 @@ WEEK_PICKER_THEME: dict[str, Any] = {
         "xs": {"input_frame": "h-7", "input_field": "text-xs",
                "clear_button": "w-6", "trigger_button": "w-7",
                "button_icon": "text-xs"},
-        "sm": {"input_frame": "h-8", "input_field": "text-xs",
+        "sm": {"input_frame": "h-8", "input_field": "text-sm",
                "clear_button": "w-7", "trigger_button": "w-8",
                "button_icon": "text-sm"},
         "md": {"input_frame": "h-10", "input_field": "text-sm",

@@ -100,7 +100,6 @@ _PHYSICAL = re.compile(
 #: **Il ne peut que baisser.** On n'ajoute pas d'entrée : on écrit la
 #: classe logique.
 _CEILING: dict[str, int] = {
-    "components/data/table/theme.py": 2,
     "components/data/tree/theme.py": 3,
     "components/feedback/avatar/theme.py": 1,
     "components/feedback/notification/theme.py": 6,
@@ -111,12 +110,10 @@ _CEILING: dict[str, int] = {
     "components/inputs/date_range_picker/theme.py": 2,
     "components/inputs/file_upload/theme.py": 9,
     "components/inputs/form_field/theme.py": 1,
-    "components/inputs/input/theme.py": 15,
     "components/inputs/month_picker/theme.py": 2,
     "components/inputs/radio/theme.py": 1,
     "components/inputs/select/theme.py": 2,
     "components/inputs/slider/theme.py": 3,
-    "components/inputs/switch/theme.py": 1,
     "components/inputs/time_picker/theme.py": 2,
     "components/inputs/toggle_group/theme.py": 1,
     "components/inputs/week_picker/theme.py": 2,

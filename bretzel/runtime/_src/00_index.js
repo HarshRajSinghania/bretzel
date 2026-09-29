@@ -229,6 +229,37 @@
   }
   $bz._refetchZone = refetchZone;
 
+  /* When EventSource GIVES UP. It retries a dropped stream by itself,
+   * but a retry answered with anything other than a 200
+   * ``text/event-stream`` — the 502 a proxy returns while the app
+   * restarts — closes it for good (``readyState === CLOSED``, per the
+   * spec). Measured on 2026-09-26 on the public demo behind Cloudflare:
+   * the container's scheduled restart left every open tab deaf to
+   * realtime until a reload. So we reopen it ourselves, doubling the
+   * delay from 1 s to 30 s; a successful ``open`` resets it.
+   *
+   * ``_sseWasDown``: whatever was broadcast during the gap is lost — the
+   * broker does not replay. On the ``open`` that ends a gap, every
+   * subscribed zone refetches once, through the same coalescing window
+   * as a ``state-dirty``. */
+  const SSE_RETRY_MIN_MS = 1000;
+  const SSE_RETRY_MAX_MS = 30000;
+  let _sseRetryMs = SSE_RETRY_MIN_MS;
+  let _sseWasDown = false;
+
+  function refetchSubscribedZones(qualname) {
+    for (const zone of document.querySelectorAll("[data-bz-subscribe-state]")) {
+      // A broadcast zone lists ALL its deps (space-separated) ; refetch
+      // when the dirtied state is one of them.
+      if (qualname !== undefined) {
+        const states = zone.getAttribute("data-bz-subscribe-state").split(" ");
+        if (!states.includes(qualname)) continue;
+      }
+      const url = zone.getAttribute("data-bz-subscribe-url");
+      if (url && window.htmx) refetchZone(zone, url);
+    }
+  }
+
   function ensureSse() {
     if (_sseSource || !_sseUrl) return;
     if (!document.querySelector("[data-bz-subscribe-state]")) return;
@@ -240,23 +271,27 @@
     // EventSource auto-reconnects and fires ``open`` again.
     $bz._persistence.register("LiveConnection.default", "memory");
     $bz._store.set("LiveConnection.default.connected", false);
-    _sseSource = new EventSource(_sseUrl);
-    _sseSource.addEventListener("open", function () {
+    const source = new EventSource(_sseUrl);
+    _sseSource = source;
+    source.addEventListener("open", function () {
       $bz._store.set("LiveConnection.default.connected", true);
-    });
-    _sseSource.addEventListener("error", function () {
-      $bz._store.set("LiveConnection.default.connected", false);
-    });
-    _sseSource.addEventListener("state-dirty", function (event) {
-      const qualname = event.data;
-      for (const zone of document.querySelectorAll("[data-bz-subscribe-state]")) {
-        // A broadcast zone lists ALL its deps (space-separated) ; refetch
-        // when the dirtied state is one of them.
-        const states = zone.getAttribute("data-bz-subscribe-state").split(" ");
-        if (!states.includes(qualname)) continue;
-        const url = zone.getAttribute("data-bz-subscribe-url");
-        if (url && window.htmx) refetchZone(zone, url);
+      _sseRetryMs = SSE_RETRY_MIN_MS;
+      if (_sseWasDown) {
+        _sseWasDown = false;
+        refetchSubscribedZones();
       }
+    });
+    source.addEventListener("error", function () {
+      $bz._store.set("LiveConnection.default.connected", false);
+      _sseWasDown = true;
+      if (source.readyState !== EventSource.CLOSED) return;
+      source.close();
+      if (_sseSource === source) _sseSource = null;
+      setTimeout(ensureSse, _sseRetryMs);
+      _sseRetryMs = Math.min(_sseRetryMs * 2, SSE_RETRY_MAX_MS);
+    });
+    source.addEventListener("state-dirty", function (event) {
+      refetchSubscribedZones(event.data);
     });
   }
   $bz._ensureSse = ensureSse;

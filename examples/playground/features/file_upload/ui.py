@@ -480,6 +480,18 @@ def page() -> None:
                             show_previews=False,
                         )
 
+                    ui.heading("paste=True (Ctrl+V in the form)", level=3)
+                    ui.text("Copy a screenshot, click in the field, paste: "
+                            "it joins the files. A paste that carries text "
+                            "(Excel cells, a Word paragraph) stays text.",
+                            color="muted", size="xs")
+                    with ui.form():
+                        with ui.vstack(gap="sm"):
+                            ui.textarea(placeholder="Paste a screenshot here…",
+                                        rows=2)
+                            ui.file_upload(variant="button", list="chips",
+                                           multiple=True, paste=True)
+
             # ── Card 4 — Composability ──────────────────────────────
             with ui.card():
                 with ui.vstack():

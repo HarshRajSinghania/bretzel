@@ -934,6 +934,14 @@ def _build_body(body_html: str, page_uuid: str, *, nav_progress: bool = True) ->
     on focus rings actually matches what's underneath the button —
     no more cream halo on a pure-white body.
 
+    It also sets ``text-base``: the theme's median step is the size a
+    text inherits when nothing names one. ``ui.text`` and ``ui.link``
+    write no size by default, nor does any plain container, and without
+    this they took the browser's 16 px — above the theme's 14, so a
+    message read larger than the heading over it. On ``<body>`` and not
+    on ``<html>``: the ``rem`` stays the browser's, so ``--spacing``
+    (``0.1875rem``) and every ``rem`` width keep their value.
+
     Refreshable swaps ride ``hx-swap-oob="morph"`` through the
     idiomorph htmx-2 extension (``hx-ext="morph"`` on the body) ; the
     V3 runtime re-binds ``bz-*`` directives on every swapped subtree.
@@ -993,7 +1001,8 @@ def _build_body(body_html: str, page_uuid: str, *, nav_progress: bool = True) ->
         # bz-id, so swapped subtrees keep their client state and the
         # bridge re-binds directives after each swap.
         'hx-ext="morph" '
-        'class="bg-background text-text transition-colors duration-200">\n'
+        'class="bg-background text-text text-base transition-colors '
+        'duration-200">\n'
         f'  <div id="{wrapper_id}" data-bretzel-page-id="{safe_uuid}"{boost} '
         f'hx-headers="{hx_headers}">\n'
         f"    {body_html}\n"

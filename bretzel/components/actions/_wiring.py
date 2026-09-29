@@ -103,3 +103,55 @@ __all__ = [
     "build_loading_spinner",
     "loading_leading_children",
 ]
+
+
+def anchor_tag(component: Component, *, href: Any, on_click: Any, type: Any,
+               kwargs: dict[str, Any], name: str) -> None:
+    """An ``href`` makes an action an ANCHOR — ``ui.button`` and
+    ``ui.icon_button`` alike, one rule for both.
+
+    The tag switches in the constructor and not in ``render``:
+    ``self._tag`` is read by introspection and by the gates, and a
+    component whose tag only knows itself at render lies to whoever asks
+    it. An explicit ``tag=`` wins — the tier-2 escape hatch.
+    """
+    if href is None:
+        return
+    if "tag" not in kwargs:
+        component._tag = "a"
+    if on_click is not None:
+        raise TypeError(
+            f"ui.{name} does not take `href=` AND `on_click=`: they are two "
+            f"jobs (navigate / act) on one target, and nothing would "
+            f"announce which applies. Choose — or place two controls."
+        )
+    if type is not None:
+        raise TypeError(
+            f"ui.{name}(href=…) renders an `<a>`, where `type=` names the "
+            f"target's MIME type and not a button's nature. Remove `type=`."
+        )
+
+
+def finish_anchor(tag: str, attrs: dict[str, Any], *, external: bool) -> None:
+    """What changes once an action renders as an ``<a>``.
+
+    - ``type`` (declared ``default="button"``) names a MIME type there:
+      ``<a type="button">`` means nothing;
+    - external: a new tab and a neutralised opener — the ``rel`` pair is
+      not cosmetic, it stops the opened page reaching ``window.opener``;
+    - disabled: an ``<a>`` has no ``disabled`` attribute, and setting it
+      blocks NOTHING — remove the destination, leave the tab order and
+      say so out loud, as ``ui.link`` does.
+    """
+    if tag == "button":
+        return
+    attrs.pop("type", None)
+    if tag != "a":
+        return
+    if external:
+        attrs.setdefault("target", "_blank")
+        attrs.setdefault("rel", "noopener noreferrer")
+    if attrs.pop("disabled", None):
+        attrs.pop("href", None)
+        attrs["aria-disabled"] = "true"
+        attrs["tabindex"] = "-1"

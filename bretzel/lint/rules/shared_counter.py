@@ -61,6 +61,9 @@ from functools import lru_cache
 from bretzel.lint.corpus import Module
 from bretzel.lint.report import Finding
 
+#: Built once: an inline ``A | B`` is rebuilt for every node walked.
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
+
 RULE = "undeclared-shared-counter"
 
 #: The operations that ACCUMULATE. ``*=`` and the rest are not: their
@@ -105,7 +108,7 @@ def _base_names(node: ast.ClassDef) -> set[str]:
     return names
 
 
-def _local_app_states(tree: ast.Module) -> dict[str, dict[str, ast.expr | None]]:
+def _local_app_states(module: Module) -> dict[str, dict[str, ast.expr | None]]:
     """``{app class: {field: its declaration's value}}``.
 
     We keep the whole declaration and not only the name: it is what will
@@ -114,7 +117,7 @@ def _local_app_states(tree: ast.Module) -> dict[str, dict[str, ast.expr | None]]
     """
     known = _app_state_names()
     states: dict[str, dict[str, ast.expr | None]] = {}
-    for node in ast.walk(tree):
+    for node in module.nodes:
         if not isinstance(node, ast.ClassDef):
             continue
         if not (_base_names(node) & (known | set(states))):
@@ -181,14 +184,14 @@ def _locals_bound_to_a_state(func: ast.AST, known: set[str]) -> dict[str, str]:
 
 def check(module: Module) -> list[Finding]:
     """The ``AppState`` totals incremented without an additive declaration."""
-    states = _local_app_states(module.tree)
+    states = _local_app_states(module)
     if not states:
         return []
     known = set(states)
 
     findings: list[Finding] = []
-    for func in ast.walk(module.tree):
-        if not isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
+    for func in module.nodes:
+        if not isinstance(func, _FUNCTIONS):
             continue
         bound_locals = _locals_bound_to_a_state(func, known)
         for node in ast.walk(func):

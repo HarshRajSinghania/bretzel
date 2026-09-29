@@ -19,7 +19,8 @@ Le § 6 disait « allowed at module scope » sans dire à quelles pages il
 s'adresse, et le corpus en contient neuf qui n'ont rien à prévisualiser :
 
 - l'infrastructure du playground (`home`, `app_map`, `inspection`,
-  `meta`, `theme_studio`) — ce ne sont pas des pages de composant ;
+  `meta` ; `theme_studio`, parti depuis dans `examples/showcase`) — ce
+  ne sont pas des pages de composant ;
 - les pages de FAMILLE (`stack`, `dnd`, `screen`) — elles montrent
   plusieurs composants en relation, pas un composant et ses props ;
 - `notification`, qui est un helper qu'on DÉCLENCHE et non un composant

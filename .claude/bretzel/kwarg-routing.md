@@ -191,10 +191,13 @@ ci-dessous). Autour, le constructeur **pop d'abord les reserved** (ligne 1,
 > `download`, débloquée par `tag="a"`). Tout le reste lève, avec un
 > message qui pointe `attrs={...}` et `bretzel describe <composant>`.
 >
-> **Limite connue** : la validité d'un attribut HTML dépend du TAG RENDU,
-> que `split_kwargs` ne connaît pas (`tag=` est retiré avant). Donc
-> `ui.button(href=…)` sans `tag="a"` passe encore et reste inerte —
-> `bretzel check` le voit, lui, puisqu'il lit le call-site.
+> **La famille de l'ancre se juge au RENDU**, seul endroit qui connaît le
+> tag : un `href` / `target` / `rel` / `download` que l'appelant pose sur
+> un élément qui n'est pas un `<a>` lève (`_refuse_stray_anchor_attrs`,
+> gaté par `test_a_link_attribute_lands_on_a_link`). Cette ligne disait
+> jusqu'au 2026-09-29 que `bretzel check` le voyait : faux, il l'admettait
+> comme attribut brut déclaré, et `ui.icon_button(href=…)` rendait un
+> `<button href>` mort sur la vitrine publique.
 
 Les catégories 3 (reactive prop) et 4 (named slot) sont soumises au
 check `BINDABLE_PROPS`. Les autres ne le sont pas (les reserved gèrent

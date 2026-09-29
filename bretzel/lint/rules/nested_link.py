@@ -48,6 +48,9 @@ from bretzel.lint.corpus import Module
 from bretzel.lint.report import Finding
 
 #: The rule's name, as it appears in a finding.
+#: Built once: an inline ``A | B`` is rebuilt for every node walked.
+_WITH = (ast.With, ast.AsyncWith)
+
 RULE = "link-inside-a-link"
 
 
@@ -91,8 +94,8 @@ def _anchors_inside(body: list[ast.stmt]) -> list[ast.Call]:
 def check(module: Module) -> list[Finding]:
     """The anchors opened inside another anchor's body."""
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
-        if not isinstance(node, ast.With | ast.AsyncWith):
+    for node in module.nodes:
+        if not isinstance(node, _WITH):
             continue
         outside = [
             item.context_expr

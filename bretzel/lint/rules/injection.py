@@ -44,7 +44,7 @@ def _is_literal(node: ast.expr) -> bool:
 
 def check(module: Module) -> list[Finding]:
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         if not isinstance(node, ast.Call):
             continue
         func = node.func

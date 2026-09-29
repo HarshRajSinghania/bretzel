@@ -48,7 +48,6 @@ Form integration : ``AUTONAME_FROM = "value"`` derives the HTML
 from __future__ import annotations
 
 import datetime as _dt
-import json
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -59,11 +58,11 @@ from bretzel.components.base._wiring import (
     imperative_listeners,
     install_open_close_toggle,
     install_value_commands,
-    server_sync_marker,
     theme_context,
 )
 from bretzel.components.inputs._picker_field import (
     anchored_panel,
+    calendar_picker_scope,
     clear_button,
     detach_wrapper_carriers,
     hidden_carrier,
@@ -240,7 +239,6 @@ class DatePicker(Component):
         raw_value = self._reactive_values.get("value")
         initial_iso = _date_to_iso(raw_value) if raw_value else ""
 
-        value_binding = self._binding_metadata.get("value")
         min_binding = self._binding_metadata.get("min")
         max_binding = self._binding_metadata.get("max")
         disabled_binding = self._binding_metadata.get("disabled")
@@ -264,37 +262,20 @@ class DatePicker(Component):
         name = detach_wrapper_carriers(self, root_attrs)
         root_attrs["class"] = slots.get("root", "")
 
-        # bz-data : just the popover ``open`` flag when bound (the value
-        # lives in the store) ; ``open`` + a local ``value`` seed in the
-        # literal case. No ``$watch`` sync — every directive addresses the
-        # value expression directly.
-        if value_binding is not None:
-            root_attrs["bz-data"] = "{open: false}"
-        else:
-            # ``value`` lives in the bz-data scope, which ``scope.absorb``
-            # PRESERVES across an idiomorph morph — great for a user's edit,
-            # but it means a SERVER change to a bound ``value=state.field``
-            # is ignored on refresh (the stale signal re-asserts). Opt the
-            # key into ``_serverSync`` so a refresh re-adopts it — but ONLY
-            # when server-backed (a plain literal keeps its client value).
-            (key,) = self._scope_keys("value")
-            sync = server_sync_marker(
-                key, enabled=self._value_server_backed("value"))
-            root_attrs["bz-data"] = (
-                f"{{open: false, {key}: {json.dumps(initial_iso)}"
-                + (f",{sync}" if sync else "") + "}"
-            )
-            # ── The receivers of the imperative API ──────────────────
-            #
-            # In BOUND mode, `.open()` / `.set()` write straight into the
-            # store and these listeners never fire; we set them anyway so
-            # the contract is the same in both modes — the choice already
-            # made by Sidebar, Dialog and Select.
-            for _ev, _handler in imperative_listeners("open").items():
-                root_attrs.setdefault(_ev, _handler)
-            root_attrs.setdefault(
-                "bz-on:bz-set", f"{value_expr(self)} = $event.detail.value"
-            )
+        # bz-data : the same two modes as MonthPicker / WeekPicker —
+        # ``open`` alone when bound, ``open`` + a local seed otherwise.
+        root_attrs["bz-data"] = calendar_picker_scope(
+            self, value_expr=val, initial=initial_iso
+        )
+        # ── The receivers of the imperative API ──────────────────────
+        #
+        # In BOUND mode, `.open()` / `.set()` write straight into the
+        # store and these listeners never fire; we set them anyway so the
+        # contract is the same in both modes — the choice already made by
+        # Sidebar, Dialog, Select and the two sibling calendar pickers.
+        for _ev, _handler in imperative_listeners("open").items():
+            root_attrs.setdefault(_ev, _handler)
+        root_attrs.setdefault("bz-on:bz-set", f"{val} = $event.detail.value")
         # Mirror the value expression onto the inner ``<bz-calendar>``'s
         # observed ``value`` ATTRIBUTE. Shared with DateRangePicker via
         # ``calendar_value_mirror`` (centralises the trap-prone

@@ -1,4 +1,4 @@
-"""Playwright probe — le kanban tient sa promesse : le tableau est PARTAGÉ (:8957).
+"""Playwright probe — le kanban tient sa promesse : chaque visiteur a SON tableau (:8957).
 
 Sert ``examples.kanban.main:app`` sur un port dédié : celle que
 l'utilisateur fait tourner sert peut-être un bundle runtime plus ancien,
@@ -9,10 +9,9 @@ Ce que ça mesure, et pourquoi ``TestClient`` ne le mesure pas
 Un GET rendu par ``TestClient`` prouve que Python a sérialisé du HTML. Il
 ne dit rien de ce qui fait cet exemple :
 
-- **deux fenêtres, une seule vérité** : ce qu'une session glisse doit
-  arriver dans l'AUTRE sans qu'elle recharge. C'est du SSE, donc du
-  navigateur, et un seul onglet ne prouve rien — il aurait de toute façon
-  re-rendu sa propre zone ;
+- **deux visiteurs, deux tableaux** : la démo est publique, donc ce
+  qu'une session glisse ne doit PAS arriver dans l'autre. Il faut deux
+  contextes de navigateur (deux jarres de cookies) pour le voir ;
 - **le refus d'un dépôt** : la limite d'en-cours ne lève pas et
   n'affiche pas d'erreur serveur ; le navigateur a déjà bougé la carte et
   c'est le morph qui la remet en place ;
@@ -196,21 +195,17 @@ def glisser(page, source, zone: str) -> str | None:
     return atterrissage
 
 
-# ── ① La mécanique : deux fenêtres, une seule vérité ──────────────────
+# ── ① Deux visiteurs, deux tableaux ───────────────────────────────────
 
 
-def le_tableau_est_partage(page_a, page_b) -> None:
-    print("\n① Deux fenêtres, une seule vérité")
+def chaque_session_a_son_tableau(page_a, page_b) -> None:
+    """La démo publique isole les visiteurs : le tableau vit en
+    ``SessionState``. Ce que A glisse ne doit JAMAIS arriver chez B —
+    sinon un inconnu déplace les cartes d'un autre."""
+    print("\n① Deux visiteurs, deux tableaux")
     for p in (page_a, page_b):
         p.goto(BASE + "/")
         pret(p)
-
-    # La seconde session prend une autre identité : le journal doit dire
-    # QUI a fait le geste, pas « quelqu'un ».
-    choisir(page_b, "Camille Roux", "Samuel Diallo")
-
-    # Le témoin : s'il survit, la page n'a pas rechargé.
-    page_b.evaluate("window.__temoin = 'vivant'")
 
     avant_b = cartes_de(page_b, "fini")
     source = page_a.get_by_text("Refonte de la page de tarifs").first
@@ -218,22 +213,15 @@ def le_tableau_est_partage(page_a, page_b) -> None:
     check("A : la carte est bien lâchée dans « Terminé »", zone == "fini",
           f"lâchée dans {zone!r}")
 
-    try:
-        page_b.wait_for_function(
-            "(n) => document.querySelectorAll("
-            "'[data-bz-dropzone=\"fini\"] [data-bz-draggable]').length === n",
-            arg=avant_b + 1, timeout=12000)
-        arrivee = True
-    except Exception:
-        arrivee = False
-
-    check("B voit la carte arriver sans avoir rien fait", arrivee,
+    # Pas d'événement à attendre : on laisse le temps à un éventuel
+    # broadcast d'arriver, puis on vérifie qu'il n'est pas venu.
+    page_b.wait_for_timeout(2500)
+    check("B ne voit pas la carte de A", cartes_de(page_b, "fini") == avant_b,
           f"{avant_b} → {cartes_de(page_b, 'fini')}")
-    check("et B n'a pas rechargé",
-          page_b.evaluate("window.__temoin") == "vivant")
-    check("le fil d'activité de B dit qui l'a fait",
-          page_b.get_by_text("Camille Roux a déplacé").count() >= 1,
-          page_b.locator("text=Activité").count() and "aucune ligne")
+    page_b.reload()
+    pret(page_b)
+    check("même après rechargement", cartes_de(page_b, "fini") == avant_b,
+          f"{avant_b} → {cartes_de(page_b, 'fini')}")
 
 
 # ── ② Le serveur arbitre : la limite d'en-cours refuse ────────────────
@@ -479,14 +467,13 @@ def la_bande_darchive(page) -> None:
             steps=8)
     page.wait_for_timeout(400)
 
-    # ⚠️ LA mesure de ce scénario. Le moteur reparente le nœud déplacé
-    # dans la zone survolée : une zone qui se laisse dimensionner par ce
-    # qu'elle héberge grandit de la taille d'une carte AU MOMENT où on
-    # vise. Mesuré sur la version d'avant, posée dans le bandeau : 104×32
-    # → 362×105, et toute la barre poussée de 73 px.
+    # A terminal zone does not receive the real card during hover. Its
+    # label remains centered, with no clipped card taking up space.
     pendant = boite_bande()
-    check("la bande ne grandit pas quand elle accueille la carte",
+    check("la bande ne grandit pas sous la carte",
           pendant == avant_taille, f"{avant_taille} → {pendant}")
+    check("aucune carte invisible dans la bande",
+          page.locator('[data-bz-dropzone="archive"] [data-bz-draggable]').count() == 0)
 
     page.mouse.up()
     page.wait_for_timeout(1000)
@@ -632,7 +619,7 @@ def main() -> int:
 
             l_anglais_est_le_defaut(browser, taille)
 
-            le_tableau_est_partage(page_a, page_b)
+            chaque_session_a_son_tableau(page_a, page_b)
             ctx_b.close()
 
             la_limite_refuse(page_a)

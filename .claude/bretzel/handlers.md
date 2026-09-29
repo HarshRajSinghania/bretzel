@@ -464,11 +464,19 @@ def save():
     redirect(f"/factures/{invoice.id}")   # ← l'URL vient de naître
 ```
 
-- **Zéro code runtime.** Ça pose l'en-tête `HX-Redirect`, qu'htmx traite
-  nativement (`render/shell.py` charge htmx complet), et qui voyage par
-  `ctx.response_headers` — le canal que les trois sorties recopiaient
-  déjà. Même schéma que `auth.login()` : une fonction appelée depuis un
-  handler, dont l'effet transite par le contexte de requête.
+- **Comme un lien, depuis le 2026-09-26.** Si la page affichée et la
+  page cible partagent un layout, seul l'outlet du layout commun le plus
+  profond change : la coque, son défilement et le `ClientState` restent
+  montés (`HX-Location`, cible `#outlet_<layout>`, swap
+  `morph:innerHTML` — ce que fait déjà un lien de sidebar). Sinon, ou pour
+  une autre origine, ou si `HX-Current-URL` manque, le document entier est
+  rechargé (`HX-Redirect`). Dans le doute on recharge : se tromper
+  swapperait un document complet dans un `<main>`.
+- **Zéro code runtime.** Les deux en-têtes sont natifs d'htmx
+  (`render/shell.py` charge htmx complet) et voyagent par
+  `ctx.response_headers`. Même schéma que `auth.login()` : une fonction
+  appelée depuis un handler, dont l'effet transite par le contexte de
+  requête.
 - **Ce n'est pas un composant** : la forme V1 (`ui.navigate`) en était un,
   dont le `__init__` écrivait un en-tête de réponse selon un
   `ctx._is_action_context` invisible — un effet de bord dans un
@@ -489,10 +497,11 @@ def save():
   pour la refuser, `abort(401)` + `@error_page(401)`.
 - **Lève sur un CR/LF/NUL dans l'URL** — une URL de redirection vient
   souvent d'un `?next=`.
-- Impl : `bretzel/server/errors.py`. Gates :
-  `tests/integration/server/test_redirect_header.py` (l'en-tête traverse),
+- Impl : `bretzel/server/navigation.py`. Gates :
+  `tests/integration/server/test_redirect_header.py` (l'en-tête traverse,
+  et lequel des deux selon les layouts),
   `tests/runtime_js/test_redirect_actually_navigates.py` (le navigateur
-  navigue vraiment).
+  navigue vraiment, et sans recharger dans une coque partagée).
 
 ⚠️ **Il n'y a PAS de kind `"redirect"` dans le protocole d'envelope**, et
 il ne doit pas revenir. Le bridge en a lu un pendant des mois
@@ -510,7 +519,7 @@ ce sont des en-têtes qu'htmx traite nativement.
 
 | tu veux | la fonction | l'en-tête |
 |---|---|---|
-| charger une autre page | `redirect(url)` | `HX-Redirect` |
+| charger une autre page | `redirect(url)` | `HX-Location` (layout commun) ou `HX-Redirect` |
 | recharger celle-ci | `reload()` | `HX-Refresh` |
 | **renommer sans bouger** | `push_url(url)` | `HX-Push-Url` |
 
@@ -676,7 +685,8 @@ de 112 Mo en effet de bord d'un démarrage. `get_or_build_css` échoue
 proprement sans binaire (`allow_download` réservé à un appel explicite),
 et `lifecycle` retombe sur le compilateur navigateur **en le disant**.
 
-⚠️ Le cache `style.css` est clé sur l'empreinte du thème seul : une classe
-ajoutée dans le code utilisateur ne l'invalide pas. Cf. `todo.md` — le
-mode `--watch` (`start_lightning_watch`, écrit et sans appelant) est la
-bonne issue.
+Le cache `style.css` est clé sur le CSS d'entrée **et** sur l'empreinte
+`(chemin, taille, mtime)` des fichiers que Tailwind balaie (`scan_roots`) :
+une classe ajoutée dans l'app recompile. La marche élague comme
+`bretzel check`, plus `archive/` à la racine (`_SCAN_SKIP` et `_pruned`, tenus
+ensemble par `test_the_prod_css_declares_its_scan_roots.py`).

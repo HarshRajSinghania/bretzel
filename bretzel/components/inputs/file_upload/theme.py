@@ -39,8 +39,10 @@ FILE_UPLOAD_THEME: dict[str, Any] = {
         # together = robust everywhere. Cf. traps.md § "overflow-x-auto
         # undone by min-width:auto" (the family of the date_picker
         # `w-fit` bug).
+        #
+        # The WIDTH is the variant's (``variants`` below), not the root's.
         "root": (
-            "bz-file-upload flex flex-col gap-3 w-full min-w-0"
+            "bz-file-upload flex flex-col gap-3 min-w-0"
         ),
         # Native input — invisible, NOT focusable (tabindex=-1 on the
         # element itself ; ``sr-only`` alone leaves it in the tab
@@ -179,7 +181,7 @@ FILE_UPLOAD_THEME: dict[str, Any] = {
             "w-full truncate text-center text-xs font-semibold text-text"
         ),
         "file_size": (
-            "w-full text-center text-[10px] text-muted"
+            "w-full text-center text-xs text-muted"
         ),
         # Async upload progress (per-file bar at the bottom of the card).
         "file_progress_bar": (
@@ -201,7 +203,7 @@ FILE_UPLOAD_THEME: dict[str, Any] = {
             "shadow-sm"
         ),
         "file_status_icon": (
-            "inline-flex shrink-0 text-current text-[10px]"
+            "inline-flex shrink-0 text-current text-xs"
         ),
         # Per-file remove button — solid, floats OUTSIDE the card
         # corner so it never overlaps the thumb.
@@ -305,6 +307,19 @@ FILE_UPLOAD_THEME: dict[str, Any] = {
             "inline-flex shrink-0 text-current"
         ),
     },
+    # ── Variants: the root's width ───────────────────────────────────
+    # The dropzone is a SURFACE, it fills its row. The button is a
+    # button: it takes its label's width. Both used to carry the
+    # dropzone's ``w-full`` on a stretching column, so the compact
+    # trigger became a 600 px bar and pushed its neighbour to the end of
+    # an ``hstack`` (measured on 2026-09-29; the showcase worked around
+    # it with ``classes="items-start"``). ``items-start`` keeps the
+    # file list under it at the root's width while the button hugs its
+    # label.
+    "variants": {
+        "dropzone": "w-full",
+        "button": "items-start",
+    },
     # ── Size paliers ─────────────────────────────────────────────────
     # Each size scales the visual weight of dropzone padding /
     # icon-size / title-text-size / button height. Read manually in
@@ -391,8 +406,8 @@ FILE_UPLOAD_THEME: dict[str, Any] = {
             "xl": "text-lg",
         },
         "dropzone_subtitle": {
-            "xs": "text-[10px] mt-0.5",
-            "sm": "text-[10px] mt-1",
+            "xs": "text-xs mt-0.5",
+            "sm": "text-xs mt-1",
             "md": "text-xs mt-1",
             "lg": "text-sm mt-1",
             "xl": "text-base mt-1.5",

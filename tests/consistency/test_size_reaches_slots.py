@@ -74,6 +74,7 @@ from bretzel.components.base import SIZE_SCALE, size_vocabulary
 from tests.consistency._discovery import (
     parsed_sources,
     public_component_classes,
+    scaled_slots,
 )
 
 #: Lu sur le socle (``bretzel.components.base.SIZE_SCALE``).
@@ -110,20 +111,6 @@ _ZERO = re.compile(r"-0(?![\w.])")
 _INVERTED_SHAPE = {"DatePicker", "DateRangePicker", "FileUpload"}
 
 
-def _scaled_slots(sizes: dict) -> set[str]:
-    """Les slots que la table `sizes` alimente réellement."""
-    values = list(sizes.values())
-    if not set(sizes) & _SIZE_KEYS:
-        return set(sizes)                       # sizes[slot][size]
-    if all(isinstance(v, str) for v in values):
-        return {"root"}                         # plate -> composeur de base
-    scaled: set[str] = set()
-    for value in values:                        # sizes[size][slot]
-        if isinstance(value, dict):
-            scaled |= set(value)
-    return scaled
-
-
 def _size_hits(template: str) -> set[str]:
     """Les utilitaires de taille présents dans une string de classes."""
     return {
@@ -137,7 +124,7 @@ def _frozen_slots(theme: dict) -> dict[str, str]:
     sizes = theme.get("sizes") or {}
     if not sizes:
         return {}
-    scaled = _scaled_slots(sizes)
+    scaled = scaled_slots(sizes)
     frozen: dict[str, str] = {}
     for slot, template in (theme.get("slots") or {}).items():
         if slot in scaled or not isinstance(template, str):
@@ -174,7 +161,7 @@ def _conflicting_slots(theme: dict) -> dict[str, str]:
     sizes = theme.get("sizes") or {}
     if not sizes:
         return {}
-    scaled = _scaled_slots(sizes)
+    scaled = scaled_slots(sizes)
     clashes: dict[str, str] = {}
     for slot, template in (theme.get("slots") or {}).items():
         if slot not in scaled or not isinstance(template, str):
@@ -253,6 +240,13 @@ _BASELINE: dict[str, set[str]] = {
         # tuiles et pas en puces — l'écart le plus dur à voir.
         "chip_icon", "chip_name", "chip_progress_bar",
         "chip_status_done", "chip_status_error",
+        # ── Visibles depuis le 2026-09-27, pas nouvelles ──────────────
+        # Elles écrivaient ``text-[10px]``, que le lecteur de familles ne
+        # reconnaît pas comme une taille : figées depuis toujours, elles
+        # passaient sous le balayage. Passées à ``text-xs`` (plus de
+        # taille littérale, ``test_a_text_size_is_a_step``), la dette se
+        # voit enfin — même traitement que leurs voisines ci-dessus.
+        "file_size", "file_status_icon",
     },
     "Input": {"prefix", "suffix"},
     "Progress": {"label"},

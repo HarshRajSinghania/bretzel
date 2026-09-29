@@ -625,7 +625,14 @@ def refreshable(
     broadcast: Sequence[type] = (),
     name: str | None = None,
 ) -> Any:
-    """Wrap ``fn`` as a refreshable page region."""
+    """Wrap ``fn`` as a refreshable page region.
+
+    The region redraws itself when a typed state named in ``deps`` changes
+    (``@refreshable(deps=[MyState])``). Data kept elsewhere — a database —
+    is redrawn by calling ``refresh(region)`` after writing it.
+    ``broadcast`` names the states whose change must also reach the other
+    open windows.
+    """
 
     def _wrap(f: Callable[..., Any]) -> RefreshableHandle:
         return RefreshableHandle(

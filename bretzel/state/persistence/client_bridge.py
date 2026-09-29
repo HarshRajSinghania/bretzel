@@ -36,10 +36,13 @@ def full_field_dict(state: ClientState) -> dict[str, Any]:
     binding ``$bz.state.ClientCounter.default.count`` resolves to
     ``undefined`` and renders empty.
 
-    Skips :class:`ClientBinding` / :class:`ClientExpression` returns —
-    should never happen here since envelopes are built outside
-    ``rendering_scope``, but we guard defensively for any caller that
-    builds one inside.
+    Inside ``rendering_scope`` a field read returns a
+    :class:`ClientBinding`, and the binding carries the raw value: it is
+    that value that goes. It happens — an action response is drained
+    inside the scope, and it seeds the instances a refreshed zone met
+    for the first time (``render/partials._render_delta``). Skipping the
+    field there sent an empty seed, which left every binding
+    ``undefined``.
     """
     from bretzel.state.scopes.client import (
         ClientBinding,
@@ -49,7 +52,9 @@ def full_field_dict(state: ClientState) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name in type(state)._all_fields():
         value = getattr(state, name)
-        if isinstance(value, (ClientBinding, ClientExpression)):
+        if isinstance(value, ClientBinding):
+            value = value.value
+        elif isinstance(value, ClientExpression):
             continue
         out[name] = value
     return out

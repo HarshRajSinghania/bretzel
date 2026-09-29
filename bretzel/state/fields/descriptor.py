@@ -240,6 +240,93 @@ def _coerce_scalar(value: Any, type_: Any) -> Any:
     return value
 
 
+def _coerce_to(value: Any, type_: Any) -> Any:
+    """A form value in its declared type: scalar, then container, then
+    business type (a ``date`` arrives as ``"2026-03-04"``).
+
+    Fast exit on ``decode_value``: 99 % of types are ``str``/``int``/
+    ``bool``, and it cost them four calls to do nothing — measured on
+    2026-09-06, +16 % on every field write.
+    """
+    value = _coerce_scalar(value, type_)
+    if isinstance(value, _SkipAssignment):
+        return value
+    value = _coerce_composite(value, type_)
+    if type_ not in _NOTHING_TO_DECODE:
+        value = decode_value(type_, value)
+    return value
+
+
+def coerce_form_value(value: Any, type_: Any) -> tuple[bool, Any]:
+    """``(provided, value)`` — a submitted string in the declared type.
+
+    The path a HANDLER PARAMETER takes (``def reached(step: int)``), the
+    same as a state field's, so ``step`` is an ``int`` there too: it used
+    to receive the raw ``"3"``, and ``step > 2`` raised a 500. ``provided``
+    is ``False`` for an empty value on a typed field — "the user entered
+    nothing", not a coercion error. Raises ``ValueError`` on garbage.
+    """
+    value = _coerce_to(value, type_)
+    if isinstance(value, _SkipAssignment):
+        return False, None
+    return True, value
+
+
+#: The key under which :func:`assign_fields` parks the writes of a batch.
+_BATCH_KEY = "_bz_batch"
+
+
+def assign_fields(instance: Any, values: dict[str, Any]) -> tuple[dict[str, str], set[str]]:
+    """Write several fields as ONE mutation. ``(errors, rejected)``.
+
+    A submitted form is one gesture: its whole-instance validators must
+    see it WHOLE. Assigned one field at a time, "passwords match" compared
+    the new password with the PREVIOUS confirmation, rejected it, rolled
+    it back — and then compared the new confirmation with the old
+    password, so two identical passwords were reported different.
+
+    Each field still runs its coercion and its single-field validators on
+    assignment; a refusal there lands in ``errors[field]`` and leaves the
+    field as it was. The whole-instance validators run once, after the
+    last field. If one refuses, EVERY field the batch wrote is restored
+    and its message goes to ``errors["_"]`` (the form's own message).
+    ``rejected`` names the submitted fields whose value was not kept, so
+    the caller can show the user's input back.
+    """
+    errors: dict[str, str] = {}
+    rejected: set[str] = set()
+    written: list[tuple[Field, bool, Any]] = []
+    instance.__dict__[_BATCH_KEY] = written
+    try:
+        for name, value in values.items():
+            try:
+                setattr(instance, name, value)
+            except ValueError as exc:
+                errors[name] = str(exc)
+                rejected.add(name)
+    finally:
+        del instance.__dict__[_BATCH_KEY]
+    validators_map: dict[str | None, list[Any]] = getattr(
+        type(instance), "__validators__", {})
+    try:
+        for v in validators_map.get(None, ()):
+            v.fn(instance)
+    except Exception as exc:
+        for fld, had_previous, previous in reversed(written):
+            if had_previous:
+                instance.__dict__[fld._storage_key] = previous
+            else:
+                instance.__dict__.pop(fld._storage_key, None)
+        if not isinstance(exc, ValueError):
+            raise
+        errors["_"] = str(exc)
+        rejected.update(values)
+        return errors, rejected
+    for fld, _had_previous, _previous in written:
+        TRACKER.notify_change(instance, fld.name)
+    return errors, rejected
+
+
 # ───────────────────────────────────────────────────────────────────────────
 # Descriptor
 # ───────────────────────────────────────────────────────────────────────────
@@ -312,27 +399,9 @@ class Field:
         cls = type(instance)
         validators_map: dict[str | None, list[Any]] = getattr(cls, "__validators__", {})
 
-        # Coerce form-data strings before anything else sees them, so
-        # validators receive the declared type and handlers can write
-        # ``setattr(state, key, value)`` for bool/int/float fields
-        # without per-field ladders.
-        value = _coerce_scalar(value, self.type_)
-        # …then the containers: a multiple selection, a date range, a
-        # panel split all arrive as JSON in a hidden field.
-        value = _coerce_composite(value, self.type_)
-        # …then the business types. One gesture for TWO paths: reading
-        # back from the store (where a ``date`` came back as
-        # ``"2026-03-04"``) and writing a form (where it arrives as a
-        # string too). Handling them separately would have left the
-        # second one silent — and it was: a field typed ``date`` kept the
-        # ``str`` with nothing saying so.
-        # Fast exit: 99 % of fields are ``str``/``int``/``bool``, and
-        # ``decode_value`` cost them four calls to do nothing — measured
-        # on 2026-09-06, +16 % on every field write. The declared type
-        # never changes after the class is built, so this test is the
-        # same on every write.
-        if self.type_ not in _NOTHING_TO_DECODE:
-            value = decode_value(self.type_, value)
+        # Form-data strings become the declared type before anything else
+        # sees them — the same pipeline a handler parameter goes through.
+        value = _coerce_to(value, self.type_)
 
         # ``_SKIP_ASSIGNMENT`` sentinel : the coercer detected an
         # empty form-data value targeting a typed-non-str field
@@ -358,6 +427,13 @@ class Field:
         instance.__dict__[self._storage_key] = value
         if hasattr(instance, "_dirty"):
             instance._dirty = True  # type: ignore[attr-defined]
+
+        # Inside :func:`assign_fields`, the whole-instance validators and
+        # the change signal wait for the LAST field of the batch.
+        batch = instance.__dict__.get(_BATCH_KEY)
+        if batch is not None:
+            batch.append((self, had_previous, previous))
+            return
 
         # 3. Whole-instance validators (multi-field invariants).
         try:

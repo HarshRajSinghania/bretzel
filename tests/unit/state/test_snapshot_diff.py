@@ -126,3 +126,20 @@ class TestBugFixPersistence:
                 return list(_Store().items)
 
         assert asyncio.run(scenario()) == ["x"]
+
+
+class TestARefusedSubmissionIsAChange:
+    """All values refused or unchanged: the diff saw nothing, the action
+    answered 204, and the form's messages never appeared."""
+
+    def test_errors_alone_mark_the_state_changed(self) -> None:
+        reg = _registry()
+        with use_registry(reg):
+            s = _Store()
+            reg.diff_and_notify()
+            s.__dict__["_bz_errors"] = {"name": "Too short."}
+            assert _Store in reg.diff_and_notify()
+            assert reg.changed_fields[_Store] == {"name"}
+            # The same messages twice are not a second change.
+            assert _Store not in reg.diff_and_notify()
+            assert not s._dirty  # nothing to persist

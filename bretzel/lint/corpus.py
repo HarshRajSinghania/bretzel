@@ -18,23 +18,20 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
-#: Folders we never descend into — neither app code, nor readable.
+if TYPE_CHECKING:
+    from bretzel.introspect import ComponentInfo, HelperInfo
+
+#: Folders we never descend into — neither app code, nor readable. Also
+#: skipped: a folder whose name starts with a dot (``.git``, ``.claude``,
+#: a tool's cache) and a virtual environment whatever its name, known by
+#: its ``pyvenv.cfg`` (PEP 405). ``bretzel/theme/build.py`` copies these
+#: rules, plus a root-level ``archive``, for the Tailwind scan.
 _SKIP_DIRS = frozenset(
-    {
-        "__pycache__",
-        ".git",
-        ".venv",
-        "venv",
-        "node_modules",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        "build",
-        "dist",
-    }
+    {"__pycache__", "venv", "site-packages", "node_modules", "build", "dist"}
 )
 
 
@@ -46,18 +43,37 @@ class Module:
     tree: ast.Module
     source: str
 
+    @cached_property
+    def nodes(self) -> tuple[ast.AST, ...]:
+        """Every node of the tree, in ``ast.walk`` order — walked once and
+        shared by the rules, which iterate this rather than ``tree``."""
+        return tuple(ast.walk(self.tree))
+
 
 def discover(paths: list[Path] | tuple[Path, ...]) -> list[Path]:
-    """The ``.py`` files under ``paths`` (files or folders)."""
+    """The ``.py`` files under ``paths`` (files or folders).
+
+    The skipped folders are pruned BELOW a given folder, never the folder
+    itself: ``bretzel check .claude/tool`` or a project checked out under
+    ``~/build/`` is read as asked.
+    """
     found: list[Path] = []
     for entry in paths:
         if entry.is_file():
             if entry.suffix == ".py":
                 found.append(entry)
             continue
-        for candidate in sorted(entry.rglob("*.py")):
-            if _SKIP_DIRS.isdisjoint(candidate.parts):
-                found.append(candidate)
+        below: list[Path] = []
+        for root, dirs, files in entry.walk():
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in _SKIP_DIRS
+                and not d.startswith(".")
+                and not (root / d / "pyvenv.cfg").is_file()
+            ]
+            below.extend(root / f for f in files if f.endswith(".py"))
+        found.extend(sorted(below))
     return found
 
 
@@ -101,7 +117,7 @@ def modules(paths: list[Path] | tuple[Path, ...]) -> list[Module]:
 _CORPUS: ContextVar[tuple[Module, ...]] = ContextVar("bretzel_lint_corpus", default=())
 
 
-# The derivations that cost O(corpus) — computed ONCE per pass
+# What is fixed for a pass — derived ONCE, not once per module
 # ───────────────────────────────────────────────────────────────────────────
 #
 # A rule reports on one module, but those reading ``current()`` compute
@@ -121,8 +137,6 @@ _DERIVED: ContextVar[dict[str, Any] | None] = ContextVar(
     "bretzel_lint_corpus_derived", default=None
 )
 
-_T = TypeVar("_T")
-
 
 @contextmanager
 def bound(found: Sequence[Module]) -> Iterator[None]:
@@ -141,14 +155,15 @@ def current() -> tuple[Module, ...]:
     return _CORPUS.get()
 
 
-def derived(key: str, build: Callable[[], _T]) -> _T:
-    """The corpus's ``key`` derivation, built once.
+def derived[T](key: str, build: Callable[[], T]) -> T:
+    """The pass's ``key`` derivation, built once.
 
-    ``build`` takes no argument: it must derive from the corpus exposed
-    by :func:`current`, otherwise two callers under the same key would
-    read each other's result. Outside ``run``, nothing is memoised —
-    ``build`` is called every time, which keeps a rule correct when it is
-    exercised on its own.
+    ``build`` takes no argument: it must derive from what is fixed for the
+    pass — the corpus exposed by :func:`current`, or the installed
+    framework — otherwise two callers under the same key would read each
+    other's result. Outside ``run``, nothing is memoised — ``build`` is
+    called every time, which keeps a rule correct when it is exercised on
+    its own.
     """
     memo = _DERIVED.get()
     if memo is None:
@@ -156,3 +171,14 @@ def derived(key: str, build: Callable[[], _T]) -> _T:
     if key not in memo:
         memo[key] = build()
     return memo[key]
+
+
+def catalogue() -> dict[str, ComponentInfo | HelperInfo]:
+    """``ui.<name>`` → its introspected card, read once per pass — the
+    rules consult it for every module or every ``ui.*`` call."""
+    from bretzel.introspect import describe_components
+
+    return derived(
+        "introspect.catalogue",
+        lambda: {info.ui_name: info for info in describe_components()},
+    )

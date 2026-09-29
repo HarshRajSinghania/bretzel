@@ -776,7 +776,7 @@ class Calendar(Component):
             # "août" against 31.6 px on "septembre". Its right edge is
             # fixed, so it was its LEFT edge that moved by 8.4 px: you
             # click, the target slips away. It is the label that must
-            # give (it has ``truncate``), never the command.
+            # give, never the command.
             # The size comes from the CALENDAR's theme, not from
             # IconButton's: its ``md`` step is 40 px where this theme
             # declares 32 (``nav_button: w-8``). The token was therefore
@@ -785,7 +785,11 @@ class Calendar(Component):
             # 16.8 px measured. The ``!`` are necessary: at equal
             # specificity, Tailwind decides by its sheet's order, so
             # without them the winner is unpredictable.
-            classes="shrink-0 " + size_map.get("nav_button", ""),
+            # ``min-w-fit min-h-fit``: the box is in density steps, the
+            # chevron in text steps — at 2.4 px a step the ``xl`` glyph
+            # (32 px) stuck out of its 28.8 px box. The steps stay the
+            # size; the glyph is the floor.
+            classes="shrink-0 min-w-fit min-h-fit " + size_map.get("nav_button", ""),
             **{
                 "bz-on:click": prev_step,
                 "aria-label": text(
@@ -806,7 +810,7 @@ class Calendar(Component):
             # "août" against 31.6 px on "septembre". Its right edge is
             # fixed, so it was its LEFT edge that moved by 8.4 px: you
             # click, the target slips away. It is the label that must
-            # give (it has ``truncate``), never the command.
+            # give, never the command.
             # The size comes from the CALENDAR's theme, not from
             # IconButton's: its ``md`` step is 40 px where this theme
             # declares 32 (``nav_button: w-8``). The token was therefore
@@ -815,7 +819,11 @@ class Calendar(Component):
             # 16.8 px measured. The ``!`` are necessary: at equal
             # specificity, Tailwind decides by its sheet's order, so
             # without them the winner is unpredictable.
-            classes="shrink-0 " + size_map.get("nav_button", ""),
+            # ``min-w-fit min-h-fit``: the box is in density steps, the
+            # chevron in text steps — at 2.4 px a step the ``xl`` glyph
+            # (32 px) stuck out of its 28.8 px box. The steps stay the
+            # size; the glyph is the floor.
+            classes="shrink-0 min-w-fit min-h-fit " + size_map.get("nav_button", ""),
             **{
                 "bz-on:click": next_step,
                 "aria-label": text(
@@ -831,9 +839,14 @@ class Calendar(Component):
         # follows ``color=`` (resolved via the local ``_resolve`` closure,
         # like the other slots), matching the prev/next IconButtons and
         # the wrapping date_picker's frame.
+        # The label's size comes from the size table (``month_label``),
+        # like every other step of this component — it was a fixed
+        # ``text-sm`` whatever ``size=`` said. ``tabular-nums``: every
+        # year is then the same width.
         trigger_cls = _resolve(
-            "inline-flex items-center gap-1 px-2 py-1 "
-            "rounded-selector text-sm font-medium text-text "
+            "inline-flex items-center gap-1 px-2 py-1 whitespace-nowrap "
+            "rounded-selector font-medium text-text tabular-nums "
+            f"{size_map.get('month_label', 'text-sm')} "
             "not-disabled:hover:bg-text/5 transition-colors "
             "disabled:opacity-40 disabled:cursor-not-allowed "
             "focus-visible:outline-none focus-visible:ring-2 "
@@ -872,6 +885,7 @@ class Calendar(Component):
             items: list[tuple[str, str]],
             aria_label: str,
             item_labels_are_expressions: bool = False,
+            reserve_widest: bool = False,
         ) -> Element:
             """Build a self-contained dropdown :
             <div bz-data={open}><trigger><panel/items></div>.
@@ -885,30 +899,65 @@ class Calendar(Component):
             inlined as ``$event.stopPropagation()`` (no modifier grammar) ;
             dismiss (click-outside + Escape) rides the shared
             ``anchored_dismiss_init`` on ``$el``.
+
+            ``reserve_widest``: the label is stacked on top of EVERY
+            item's label, invisible (one grid cell, ``visibility:
+            hidden``), so the trigger is as wide as the widest one
+            whatever is displayed. That is what lets the root size itself
+            on its content (``min-w-max``) without the month deciding the
+            width — the 14.8 px arrow jump of 2026-08-25.
             """
+            label: Node = Element(
+                tag="span",
+                attrs={"bz-text": label_expr},
+                children=(),
+            )
+            if reserve_widest:
+                stacked = "col-start-1 row-start-1"
+                ghosts: list[Node] = []
+                for lbl, _ in items:
+                    ghost_attrs: dict[str, Any] = {
+                        "class": f"{stacked} invisible",
+                        "aria-hidden": "true",
+                    }
+                    if item_labels_are_expressions:
+                        ghost_attrs["bz-text"] = lbl
+                        ghost_children: tuple[Node, ...] = ()
+                    else:
+                        ghost_children = (_TextNode(lbl),)
+                    ghosts.append(Element(
+                        tag="span", attrs=ghost_attrs, children=ghost_children,
+                    ))
+                # ``justify-items-end``: the name sits against its
+                # chevron, the reserved slack on the arrow's side.
+                label = Element(
+                    tag="span",
+                    attrs={"class": "grid justify-items-end"},
+                    children=(
+                        Element(
+                            tag="span",
+                            attrs={"class": stacked, "bz-text": label_expr},
+                            children=(),
+                        ),
+                        *ghosts,
+                    ),
+                )
             trigger = Element(
                 tag="button",
                 attrs={
                     "type": "button",
-                    # ``min-w-0`` on the TRIGGER, not only on its
-                    # wrapper: ``truncate`` on the label does nothing as
-                    # long as the box containing it keeps its content
-                    # size. Measured at ``xs`` in French, the label was
-                    # 67.7 px in a 61.2 px button — it OVERFLOWED onto
-                    # the year selector, which ended up squeezed to
-                    # 38.8 px: "septembre2026" stuck together, month
-                    # chevron swallowed.
-                    "class": trigger_cls + " min-w-0",
+                    # No ``min-w-0`` here nor on the wrapper any more:
+                    # the header used to SHRINK its triggers to fit a
+                    # width written in steps, and a label that could not
+                    # truncate overflowed onto the year ("septembre2026").
+                    # The root now takes its content's width instead.
+                    "class": trigger_cls,
                     "aria-label": aria_label,
                     "bz-on:click": "$event.stopPropagation(); open = !open",
                     **_header_disable_attrs,
                 },
                 children=(
-                    Element(
-                        tag="span",
-                        attrs={"bz-text": label_expr},
-                        children=(),
-                    ),
+                    label,
                     Element(
                         tag="iconify-icon",
                         attrs={
@@ -969,12 +1018,7 @@ class Calendar(Component):
             return Element(
                 tag="div",
                 attrs={
-                    # ``min-w-0``: that is what allows the label to
-                    # give. Without it, a remainder of 0.8 px was enough
-                    # to push the arrow away — the guarantee must be
-                    # STRUCTURAL (the command never moves), not "it just
-                    # about fits in this language".
-                    "class": "relative inline-block min-w-0",
+                    "class": "relative inline-block",
                     "bz-data": "{open: false}",
                     "bz-init": anchored_dismiss_init("open"),
                 },
@@ -1002,6 +1046,7 @@ class Calendar(Component):
             ],
             aria_label=text("calendar.month"),
             item_labels_are_expressions=client_months,
+            reserve_widest=True,
         )
         year_drop_el = _build_dropdown(
             label_expr="year",

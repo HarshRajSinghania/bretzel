@@ -334,6 +334,15 @@ def page() -> None:
                         ui.icon_button("save", type="reset",
                                        aria_label="Reset")
 
+                    ui.heading("href — an <a>, like ui.button(href=)",
+                               level=3)
+                    with ui.hstack():
+                        ui.icon_button("book-open", href="/button",
+                                       aria_label="Same tab")
+                        ui.icon_button("github", external=True,
+                                       href="https://github.com/JeanHoccart/bretzel",
+                                       aria_label="New tab")
+
             # ── Card 2 — Slots ──────────────────────────────────────
             with ui.card():
                 with ui.vstack():

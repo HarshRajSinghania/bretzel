@@ -25,10 +25,12 @@ title then a sub-component overriding it), the LAST one is the value
 that ships. There is no auto-template / concatenation — the caller is
 fully responsible for the final string shape.
 
-No reactive support : ``<head>`` is rendered server-side at request
-time. To make the title follow live state, push the new title via
-the ``HX-Trigger`` event ``bretzel:title`` from a server action
-(the runtime listens for it and updates ``document.title``).
+No client binding : the text is a Python ``str``. To make the title
+follow server state, call ``ui.title`` inside a ``@refreshable`` zone
+that depends on it: when an action re-renders the zone, the response
+carries the new title in the ``HX-Trigger`` event ``bretzel:title``
+(``render/partials.push_title``) and the runtime updates
+``document.title``. A partial navigation sends it the same way.
 """
 
 from __future__ import annotations
@@ -44,8 +46,8 @@ class Title(Component):
     """Page-level ``<title>`` override (side-effect component)."""
 
     IS_CONTAINER: ClassVar[bool] = False
-    # No reactive surface — ``<head>`` is SSR-only ; live-update is
-    # served by the runtime's ``bretzel:title`` HX-Trigger flow.
+    # No reactive surface — ``<head>`` is SSR-only ; live-update is a
+    # ``@refreshable`` zone re-rendering it (``bretzel:title`` HX-Trigger).
     BINDABLE_PROPS: ClassVar[tuple[str, ...]] = ()
     def __init__(
         self,
@@ -62,8 +64,8 @@ class Title(Component):
             raise TypeError(
                 f"Title text must be a str — got {type(text).__name__}. "
                 f"For data-dependent titles, format the string in "
-                f"Python ; reactive titles use the ``bretzel:title`` "
-                f"HX-Trigger flow, not this component."
+                f"Python ; for a title that follows state, call "
+                f"ui.title inside a @refreshable zone that depends on it."
             )
         super().__init__()
         self._text = text

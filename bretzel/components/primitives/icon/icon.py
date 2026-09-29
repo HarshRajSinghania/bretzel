@@ -17,6 +17,7 @@ from typing import Any, ClassVar
 
 from bretzel.components.base import Component, reactive_prop
 from bretzel.components.primitives.icon.theme import ICON_THEME
+from bretzel.core import escape_js
 from bretzel.core.tree import Element
 
 
@@ -87,13 +88,8 @@ class Icon(Component):
             # binding's underlying value) AND a ``bz-attr:icon=`` the runtime
             # re-evaluates live. Without the static fallback the iconify-icon
             # element has no glyph between SSR and runtime boot.
-            from bretzel.core.escape import RawAttrValue
             from bretzel.runtime.protocol import BZ_ATTR_PREFIX
             name_js = self.path_of(name_binding)
-            style_arg = (
-                "null" if not default_style
-                else f"'{default_style}'"
-            )
             # SSR fallback stored in ``_reactive_values["name"]`` at
             # construction ; may be empty for fresh bindings — only emit when
             # present.
@@ -102,8 +98,18 @@ class Icon(Component):
                 attrs["icon"] = self._resolve_name(
                     ssr_name, default_set, default_style
                 )
-            attrs[f"{BZ_ATTR_PREFIX}icon"] = RawAttrValue(
-                f"$bz._resolveIcon({name_js}, '{default_set}', {style_arg})"
+            # A plain ``str``: ``serialize_attrs`` escapes it like any
+            # value. The expression of a ``then_else`` carries ``"``, and
+            # an unescaped one closed the attribute — the runtime then
+            # compiled a truncated expression and its scan died for the
+            # whole page. The set and style are JS string literals, hence
+            # ``escape_js`` inside their single quotes.
+            style_arg = (
+                f"'{escape_js(default_style)}'" if default_style else "null"
+            )
+            attrs[f"{BZ_ATTR_PREFIX}icon"] = (
+                f"$bz._resolveIcon({name_js}, '{escape_js(default_set)}', "
+                f"{style_arg})"
             )
         else:
             name = self._reactive_values.get("name") or ""

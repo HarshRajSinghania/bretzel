@@ -113,7 +113,10 @@ MEASURE = """(ids) => {
     const hdr = root.querySelector('[data-bz-cal-header]');
     const buttons = [...hdr.querySelectorAll('button')];
     const next = buttons[buttons.length - 1];
-    const label = hdr.querySelector('span');
+    // Le libellé VISIBLE : depuis 2026-09-29 le déclencheur empile les
+    // douze noms (invisibles) pour réserver la largeur du plus long ;
+    // le premier de la pile est celui qu'on lit.
+    const label = hdr.querySelector('button > span > span') || hdr.querySelector('span');
     // Le declencheur du MOIS : son chevron est le premier a etre ecrase
     // quand l'en-tete manque de place, et c'est le symptome qu'aucune
     // mesure de largeur ne montre. Vu a ``xs`` en francais avant la

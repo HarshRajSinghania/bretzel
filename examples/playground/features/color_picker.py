@@ -495,7 +495,7 @@ def page() -> None:
 
             ui.heading('A light / dark pair', level=3)
             ui.text(
-                'The real use case — it is exactly what ``/theme-studio``'
+                'The real use case — it is exactly what the showcase studio'
                     ' does for its twenty-two tokens. Nothing ties the two '
                     'fields together: they are two independent values, side '
                     'by side.',

@@ -14,6 +14,8 @@ The cheap index always present, the detail one command away.
 
 from __future__ import annotations
 
+import textwrap
+
 from bretzel.introspect.components import RESERVED_KWARGS, describe_components
 from bretzel.introspect.model import (
     SOURCE_REACTIVE_PROP,
@@ -40,6 +42,8 @@ def _names(params: tuple[ParamInfo, ...]) -> str:
 def render_index() -> str:
     """One line per ``ui.*`` symbol — plus a contracts line when the
     component carries any."""
+    from bretzel.components.base.events import SERVER_HANDLER_RULE
+
     catalogue = describe_components()
     components = [i for i in catalogue if isinstance(i, ComponentInfo)]
     helpers = [i for i in catalogue if isinstance(i, HelperInfo)]
@@ -56,7 +60,8 @@ def render_index() -> str:
         f"below for brevity: {', '.join(RESERVED_KWARGS)}.",
         "",
         "A `click` event is written as `on_click=`. Pass a slot by its name.",
-        "Full details for one entry: `describe <name>`.",
+        *textwrap.wrap(SERVER_HANDLER_RULE, 76, break_on_hyphens=False),
+        "Full details: `describe <name> [<name> …]` — every card you need, one call.",
         "",
     ]
 

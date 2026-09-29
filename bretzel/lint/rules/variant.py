@@ -54,7 +54,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Sequence
 
-from bretzel.lint.corpus import Module, current, derived
+from bretzel.lint.corpus import Module, catalogue, current, derived
 from bretzel.lint.report import Finding
 from bretzel.lint.rules._theme_calls import component_maps, dict_items
 
@@ -99,28 +99,28 @@ def _shipped() -> dict[str, dict[str, frozenset[str]]]:
     """
     from bretzel.introspect import prop_vocabulary
 
-    return prop_vocabulary()
+    return derived(f"{RULE}.shipped", prop_vocabulary)
 
 
 def _ui_name_to_theme_key() -> dict[str, str]:
     """``ui.<name>`` → its theme key. Eight components differ."""
-    from bretzel.introspect import ComponentInfo, describe_components
+    from bretzel.introspect import ComponentInfo
 
     return {
         info.ui_name: info.theme_key
-        for info in describe_components()
+        for info in catalogue().values()
         if isinstance(info, ComponentInfo) and info.theme_key
     }
 
 
-def _declared_in(tree: ast.Module) -> dict[str, dict[str, set[str]]]:
-    """What this tree's literal ``Theme(components={…})`` add.
+def _declared_in(module: Module) -> dict[str, dict[str, set[str]]]:
+    """What this module's literal ``Theme(components={…})`` add.
 
     The key's node, the second element ``dict_items`` returns, is unused
     here: this rule aggregates a VOCABULARY and locates nothing.
     """
     out: dict[str, dict[str, set[str]]] = {}
-    for components in component_maps(tree):
+    for components in component_maps(module):
         for theme_key, _, comp_value in dict_items(components):
             groups = out.setdefault(theme_key, {})
             for group, _, group_value in dict_items(comp_value):
@@ -131,11 +131,11 @@ def _declared_in(tree: ast.Module) -> dict[str, dict[str, set[str]]]:
 
 
 def _merge(
-    into: dict[str, dict[str, set[str]]], trees: Sequence[ast.Module]
+    into: dict[str, dict[str, set[str]]], modules: Sequence[Module]
 ) -> dict[str, dict[str, set[str]]]:
-    """Pour ``trees``'s declarations into ``into`` (mutated and returned)."""
-    for tree in trees:
-        for theme_key, groups in _declared_in(tree).items():
+    """Pour ``modules``'s declarations into ``into`` (mutated and returned)."""
+    for module in modules:
+        for theme_key, groups in _declared_in(module).items():
             target = into.setdefault(theme_key, {})
             for group, keys in groups.items():
                 target.setdefault(group, set()).update(keys)
@@ -158,16 +158,14 @@ def _declared_everywhere(module: Module) -> dict[str, dict[str, set[str]]]:
     """
     corpus = current()
     if not corpus:
-        return _merge({}, [module.tree])
+        return _merge({}, [module])
 
-    shared = derived(
-        f"{RULE}.declared", lambda: _merge({}, [m.tree for m in current()])
-    )
+    shared = derived(f"{RULE}.declared", lambda: _merge({}, corpus))
     if any(m.tree is module.tree for m in corpus):
         return shared
     return _merge(
         {key: {g: set(v) for g, v in groups.items()} for key, groups in shared.items()},
-        [module.tree],
+        [module],
     )
 
 
@@ -175,7 +173,7 @@ def check(module: Module) -> list[Finding]:
     """The values no table — shipped or declared — carries."""
     calls = [
         node
-        for node in ast.walk(module.tree)
+        for node in module.nodes
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name)

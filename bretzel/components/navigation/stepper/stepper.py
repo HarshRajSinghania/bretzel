@@ -63,7 +63,7 @@ from bretzel.components.base import (
 from bretzel.components.base._wiring import (
     coerce_index,
     hidden_carrier_attrs,
-    server_sync_marker,
+    scope_literal,
     unwrap_transparent,
 )
 from bretzel.components.base._wiring import (
@@ -73,63 +73,6 @@ from bretzel.components.navigation.stepper.theme import STEPPER_THEME
 from bretzel.components.primitives.icon import Icon
 from bretzel.core.tree import Element, Node
 from bretzel.core.tree import TextNode as TextNode
-
-
-def _build_bz_data(
-    *,
-    scope_key: str,
-    has_local_value: bool,
-    initial_value: int,
-    binding_path: str | None,
-    max_index: int,
-    server_synced: bool,
-) -> str:
-    """The instance's ``bz-data``: **data, not code**.
-
-    The methods (``_status`` / ``goTo`` / ``next`` / ``prev``) live once
-    in ``$bz.stepper.scope``
-    (``bretzel/runtime/_src/16_accordion.js``). All that leaves from here
-    is the state, the read/write indirection, and the ``_max`` bound.
-
-    Two modes, like Tabs:
-
-    - **local**: a ``value`` signal. When the value comes from the server
-      (``value=state.step``), it carries ``_serverSync`` so that a
-      ``@refreshable``'s morph re-adopts it — the server is
-      authoritative. A literal (``value=1``) abstains, otherwise a
-      neighbouring refresh would overwrite the client's navigation.
-    - **binding**: NO local signal and most certainly no getter —
-      ``scope.absorb`` evaluates each key once and would freeze a getter
-      on its first value. The directives and ``_read``/``_write``
-      address the ``$bz.state.<path>`` cell directly.
-    """
-    # ``_max`` is CONFIG: the number of steps comes from the server, the
-    # client never writes it → re-seeded unconditionally. ``absorb``
-    # never rewrites an existing signal, so without this a stepper that
-    # gains or loses a step kept its old bound (``next()`` stopped at the
-    # old maximum). Same root as Pagination's ``_total``.
-    config_sync = ["_max"]
-    if has_local_value:
-        # The VALUE stays gated: with no server ownership, a
-        # neighbouring refresh would overwrite the step the client has
-        # just reached.
-        keys = [scope_key, *config_sync] if server_synced else config_sync
-        sync = server_sync_marker(*keys, enabled=True)
-        state = f"{scope_key}: {json.dumps(initial_value)},{sync} "
-        target = f"this.{scope_key}"
-    else:
-        assert binding_path is not None
-        state = f"{server_sync_marker(*config_sync, enabled=True).lstrip()} "
-        target = binding_path
-
-    return (
-        "{...$bz.stepper.scope,"
-        + state
-        + f"_read() {{ return {target}; }},"
-        + f"_write(v) {{ {target} = v; }},"
-        + f"_max: {max_index}"
-        + "}"
-    )
 
 
 class Stepper(Component):
@@ -144,7 +87,7 @@ class Stepper(Component):
     # ``writes=True`` → the metaclass derives ``TWO_WAY_PROPS``.
     # The scope key is the prop's name — ``value`` — in the ``bz-data``
     # (≠ the prop's name) — declared here, not hard-coded in the builder
-    # nor in ``server_sync_marker``.
+    # nor in ``scope_literal``.
     value: Any = reactive_prop(
         default=0,
         emit_attr=False,
@@ -231,7 +174,7 @@ class Stepper(Component):
         )
         # The expression the directives read: the local signal, or the
         # tracked store cell in binding mode (NEVER a scope getter, which
-        # ``absorb`` would freeze — cf. ``_build_bz_data``).
+        # ``absorb`` would freeze — cf. ``scope_literal``).
         active_expr = binding_path or scope_key
 
         # ── Walking the children ─────────────────────────────────────
@@ -359,13 +302,17 @@ class Stepper(Component):
         wrapper_children.extend(passthrough)
 
         root_attrs["class"] = self.slot_class("root")
-        root_attrs["bz-data"] = _build_bz_data(
-            scope_key=scope_key,
-            has_local_value=value_binding is None,
-            initial_value=initial_index,
+        # The methods (``_status`` / ``goTo`` / ``next`` / ``prev``) live
+        # once in ``$bz.stepper.scope`` (``16_accordion.js``). ``_max`` is
+        # server config: a stepper that gains or loses a step must not
+        # keep its old bound (``next()`` would stop at the old maximum).
+        root_attrs["bz-data"] = scope_literal(
+            "$bz.stepper.scope",
+            cell=scope_key,
+            initial=json.dumps(initial_index),
             binding_path=binding_path,
-            max_index=max_index,
             server_synced=value_server_backed,
+            config={"_max": str(max_index)},
         )
         # Reception of the imperative commands issued by an external
         # trigger (``wizard.next()`` on a button elsewhere in the page).

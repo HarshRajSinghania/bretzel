@@ -217,11 +217,11 @@ class Banner(Component):
         root_attrs["class"] = root_class
         root_attrs.setdefault("role", "status")
         if show_close:
-            # Local bz-data ``open`` scope (keyed by bz-id, survives
-            # morphs). No FOUC pre-stamp — ``open: true`` paints visible.
+            # Local bz-data ``open`` scope (re-seeded only after a server
+            # ``on_close``, cf. the helper). No FOUC pre-stamp — ``open: true`` paints visible.
             # The root ``bz-show="open"`` handles only the × dismiss ;
             # the binding gate lives on the button's own ``bz-show``.
-            root_attrs.update(dismiss_local_scope())
+            root_attrs.update(dismiss_local_scope(root_attrs))
 
         return Element(
             tag=self._tag, attrs=root_attrs, children=tuple(children),

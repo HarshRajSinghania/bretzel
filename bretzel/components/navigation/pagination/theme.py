@@ -54,11 +54,11 @@ PAGINATION_THEME: dict[str, Any] = {
     },
     "sizes": {
         "xs": {
-            "item": "w-7 h-7 text-[10px]",
+            "item": "w-7 h-7 text-xs",
             "nav": "p-1",
         },
         "sm": {
-            "item": "w-8 h-8 text-xs",
+            "item": "w-8 h-8 text-sm",
             "nav": "p-1.5",
         },
         "md": {

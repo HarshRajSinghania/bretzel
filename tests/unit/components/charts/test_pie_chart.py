@@ -6,7 +6,6 @@ from bretzel.components.base.testing import render_isolated
 from bretzel.components.charts.pie_chart.pie_chart import PieChart
 from bretzel.core.serialize import serialize
 
-
 SAMPLE = [("Direct", 42), ("Search", 28), ("Social", 18), ("Email", 12)]
 
 
@@ -142,9 +141,9 @@ class TestPieChart:
         # 4 slices → first 4 of the default palette.
         assert "fill-(--bz-solid)" in out
         assert "bz-c-primary" in out
-        assert "bz-c-success" in out
-        assert "bz-c-warning" in out
+        assert "bz-c-secondary" in out
         assert "bz-c-info" in out
+        assert "bz-c-success" in out
 
     def test_size_drives_square_dimensions(self) -> None:
         with render_isolated():

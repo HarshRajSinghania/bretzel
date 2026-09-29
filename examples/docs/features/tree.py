@@ -55,7 +55,6 @@ from bretzel.introspect import (
 
 from examples.docs.features.shell import shell
 from examples.docs.lib.blocks import plain
-from examples.docs.lib.i18n import tr
 
 PATH = "/tree"
 
@@ -116,13 +115,12 @@ def panneau(n: PackageNode, selection: Selection) -> None:
         # The WHOLE docstring, unmarked. `ui.text` preserves the source
         # text's line breaks through `whitespace-pre-line`, otherwise a
         # docstring's paragraphs stick back together into one block.
-        ui.text(plain(n.doc) or tr('(this folder has no docstring)',
-                                   "(ce dossier n'a pas de docstring)"),
+        ui.text(plain(n.doc) or '(this folder has no docstring)',
                 size="sm", classes="whitespace-pre-line")
         if n.modules:
             ui.divider()
             publics = sum(len(m.symbols) for m in n.modules)
-            ui.text(f"{len(n.modules)} module(s), {publics} symbole(s) public(s)",
+            ui.text(f"{len(n.modules)} module(s), {publics} public symbol(s)",
                     weight="semibold", size="xs", color="muted")
             for mod in n.modules:
                 module(mod)
@@ -220,13 +218,11 @@ def libelle(n: PackageNode) -> ui.Fragment:
         with ui.hstack(gap="xs", align="center"):
             ui.text(n.name.split(".")[-1], weight="semibold", size="sm")
             if n.name in _CLASSES:
-                ui.badge(tr('classified',
-                            'classé'), color="primary", size="xs")
+                ui.badge('classified', color="primary", size="xs")
     return frag
 
 
-@page(PATH, layout=shell, title=tr("The framework's tree",
-                                   "L'arbre du framework"))
+@page(PATH, layout=shell, title="The framework's tree")
 def tree_page() -> None:
     racine = describe_package("bretzel")
     total = len(package_names())
@@ -245,31 +241,24 @@ def tree_page() -> None:
     # ``--breakpoint-2xl:96rem`` — the variable is indeed defined.
     with ui.container(width="2xl"):
         with ui.vstack(gap="lg"):
-            ui.heading(tr("The framework's tree",
-                          "L'arbre du framework"), level=1, size="3xl")
+            ui.heading("The framework's tree", level=1, size="3xl")
             ui.text(
-                f"{total} paquets, lus en direct. Cette page n'écrit "
-                f"aucun nom et aucune description : elle appelle "
-                f"`describe_package('bretzel')` et rend ce qui revient. "
-                f"Un dossier ajouté demain apparaît ici sans que personne "
-                f"ne touche à ce fichier.",
+                f"{total} packages, read live. This page writes no name "
+                f"and no description: it calls "
+                f"`describe_package('bretzel')` and renders what comes back. "
+                f"A folder added tomorrow appears here without anyone "
+                f"touching this file.",
                 color="muted",
             )
 
             ui.alert(
-                tr('The folders marked “classified” ALSO have a table '
-                   'grouping their symbols by need — that is what `bretzel '
-                   'describe bretzel.state` returns. The others only have '
-                   'their arrangement, which is already the answer to “what '
-                   'is in there”.',
-                   'Les dossiers marqués « classé » ont EN PLUS une table qui'
-                   " groupe leurs symboles par besoin — c'est ce que rend "
-                   "`bretzel describe bretzel.state`. Les autres n'ont que "
-                   "leur rangement, ce qui est déjà la réponse à « qu'est-ce "
-                   "qu'il y a là-dedans »."),
-                color="info", title=tr('Two levels, and they complement each '
-                                       'other',
-                                       'Deux niveaux, et ils se complètent'),
+                'The folders marked “classified” ALSO have a table '
+                'grouping their symbols by need — that is what `bretzel '
+                'describe bretzel.state` returns. The others only have '
+                'their arrangement, which is already the answer to “what '
+                'is in there”.',
+                color="info", title='Two levels, and they complement each '
+                                    'other',
             )
 
             selection = Selection()
@@ -283,8 +272,7 @@ def tree_page() -> None:
             with ui.grid(cols={"base": 1, "md": 3}, gap="md"):
                 with ui.card():
                     with ui.vstack(gap="sm"):
-                        ui.heading(tr('The layout',
-                                      'Le rangement'), level=2, size="lg")
+                        ui.heading('The layout', level=2, size="lg")
                         with ui.tree(value=selection.picked,
                                      expanded=[racine.name], size="sm"):
                             noeud(racine)
@@ -298,36 +286,26 @@ def tree_page() -> None:
                 # code.
                 with ui.card(classes="md:col-span-2"):
                     with ui.vstack(gap="sm"):
-                        ui.heading(tr('What the folder says about itself',
-                                      'Ce que le dossier dit de lui-même'),
+                        ui.heading('What the folder says about itself',
                                    level=2, size="lg")
                         for n in walk(racine):
                             panneau(n, selection)
 
             with ui.card():
                 with ui.vstack(gap="sm"):
-                    ui.heading(tr('What this page does not show',
-                                  'Ce que cette page ne montre pas'), level=2)
+                    ui.heading('What this page does not show', level=2)
                     ui.text(
-                        tr('Of a symbol, the tree gives the name and the '
-                           'first line. Not its parameters, not its slots, '
-                           'not its events: there are 2 827 lines of those '
-                           'for the 111 components alone, and showing them '
-                           'here would make a page nobody would read. The '
-                           'catalogue has its own page, and `bretzel describe'
-                           ' <name>` returns the complete sheet on the '
-                           'command line.',
-                           "D'un symbole, l'arbre donne le nom et la première"
-                           ' ligne. Pas ses paramètres, pas ses slots, pas '
-                           'ses events : il y en a 2 827 lignes pour les 111 '
-                           'composants seuls, et les afficher ici ferait une '
-                           'page que personne ne lirait. Le catalogue a sa '
-                           'propre page, et `bretzel describe <nom>` rend la '
-                           'fiche complète en ligne de commande.'),
+                        'Of a symbol, the tree gives the name and the '
+                        'first line. Not its parameters, not its slots, '
+                        'not its events: there are 2 827 lines of those '
+                        'for the 111 components alone, and showing them '
+                        'here would make a page nobody would read. The '
+                        'catalogue has its own page, and `bretzel describe'
+                        ' <name>` returns the complete sheet on the '
+                        'command line.',
                         color="muted", size="sm",
                     )
                     with ui.hstack(gap="sm", wrap=True):
-                        ui.link("Catalogue ui.*", href="/components")
-                        ui.link("Cheat-sheet", href="/cheatsheet")
-                        ui.link(tr('Browser capabilities',
-                                   'Capacités navigateur'), href="/browser")
+                        ui.link("ui.* catalogue", href="/components")
+                        ui.link("Cheat sheet", href="/cheatsheet")
+                        ui.link('Browser capabilities', href="/browser")

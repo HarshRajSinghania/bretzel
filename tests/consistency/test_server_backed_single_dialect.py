@@ -62,6 +62,9 @@ from tests.consistency._discovery import parsed_sources
 _COMPONENTS_DIR = pathlib.Path("bretzel/components").resolve()
 _BASE_DIR = _COMPONENTS_DIR / "base"
 _HELPER = "_value_server_backed"
+#: Ce qui émet ``_serverSync`` : le marqueur, et le littéral de scope qui
+#: le compose depuis la dette n°1 (quinze composants, 2026-09-26).
+_EMITTERS = frozenset({"server_sync_marker", "scope_literal"})
 
 
 #: 262 modules hors ``base/`` le 2026-08-19 ; le plancher laisse de la
@@ -97,10 +100,10 @@ def test_server_sync_marker_module_adopts_the_helper(path: pathlib.Path) -> None
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id == "server_sync_marker"
+        and node.func.id in _EMITTERS
     ]
     if not calls:
-        pytest.skip("module sans server_sync_marker")
+        pytest.skip("module sans émetteur de _serverSync")
 
     # ``_serverSync`` porte DEUX catégories depuis le 2026-08-03 :
     #
@@ -118,6 +121,10 @@ def test_server_sync_marker_module_adopts_the_helper(path: pathlib.Path) -> None
     # Convention vérifiée : aucune ``scope_keys`` déclarée ne commence par
     # ``_``, donc le préfixe partitionne proprement les deux catégories.
     def _only_config(call: ast.Call) -> bool:
+        if call.func.id == "scope_literal":  # type: ignore[attr-defined]
+            # La décision « serveur ou pas » y passe par ``server_synced=`` :
+            # sans lui, seule la config est re-semée.
+            return not any(k.arg == "server_synced" for k in call.keywords)
         literals = [
             a.value for a in call.args
             if isinstance(a, ast.Constant) and isinstance(a.value, str)

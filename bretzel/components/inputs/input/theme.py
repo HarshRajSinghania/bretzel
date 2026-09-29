@@ -28,6 +28,14 @@ from __future__ import annotations
 
 from typing import Any
 
+#: The two icons' overlay — absolute, muted, lit up on focus.
+_ICON_OVERLAY = (
+    "absolute text-muted/60 "
+    "group-focus-within:text-(--bz-text-muted) "
+    "transition-colors pointer-events-none "
+    "flex items-center justify-center"
+)
+
 INPUT_THEME: dict[str, Any] = {
     "slots": {
         # No-affix architecture : root just positions icons over the input.
@@ -75,26 +83,17 @@ INPUT_THEME: dict[str, Any] = {
         # Inline static label slots (e.g. ``https://`` / ``.com``).
         "prefix": (
             "shrink-0 text-muted/60 text-sm font-medium select-none "
-            "pl-3 py-2"
+            "ps-3 py-2"
         ),
         "suffix": (
             "shrink-0 text-muted/60 text-sm font-medium select-none "
-            "pr-3 py-2"
+            "pe-3 py-2"
         ),
         # Absolute-positioned icons overlaid on the no-affix input ;
         # ``group-focus-within`` lights them up in the focus colour.
-        "icon_left": (
-            "absolute left-3 text-muted/60 "
-            "group-focus-within:text-(--bz-text-muted) "
-            "transition-colors pointer-events-none "
-            "flex items-center justify-center"
-        ),
-        "icon_right": (
-            "absolute right-3 text-muted/60 "
-            "group-focus-within:text-(--bz-text-muted) "
-            "transition-colors pointer-events-none "
-            "flex items-center justify-center"
-        ),
+        # Same overlay both sides; the step sets the offset (``sizes``).
+        "icon_left": _ICON_OVERLAY,
+        "icon_right": _ICON_OVERLAY,
         # The ``×`` of ``clearable=True``. It occupies the SAME right
         # edge as ``icon_right`` (and as ``suffix`` in the other layout)
         # — the two together would overlap, and it is up to the caller to
@@ -112,7 +111,7 @@ INPUT_THEME: dict[str, Any] = {
         # NOT ``pointer-events-none``, unlike the two icons: this one is
         # clicked.
         "clear_button": (
-            "absolute right-3 text-muted/60 "
+            "absolute end-3 text-muted/60 "
             "not-disabled:hover:text-text cursor-pointer "
             "transition-colors outline-none rounded-selector "
             "focus-visible:ring-2 focus-visible:ring-(--bz-focus) "
@@ -124,35 +123,58 @@ INPUT_THEME: dict[str, Any] = {
     # Sizes apply to the input ``height + padding + text-size`` and add
     # extra left/right padding when an icon slot is present (so the
     # text doesn't collide with the absolute-positioned icon).
+    #
+    # ⚠️ The icon follows the step too — its SIZE (``icon_size``, one
+    # notch above the text, cf. ``ICON_SIZE_ABOVE``) and its OFFSET
+    # (``icon_left`` / ``icon_right``, the field's own ``px``). Until
+    # 2026-09-27 a named icon kept Icon's ``md`` (16 px) at ``left-3``
+    # whatever the step: 25 px of icon where the text of an ``xs`` field
+    # starts at 21 — the glyph sat ON the placeholder. The pad is now
+    # offset + icon + ~5 px, measured on ``/ladder``.
     "sizes": {
         "xs": {
             "input": "h-7 px-2 text-xs",
-            "icon_pad_left": "pl-7",
-            "icon_pad_right": "pr-7",
+            "icon_size": "xs",
+            "icon_left": "start-2",
+            "icon_right": "end-2",
+            "icon_pad_left": "ps-7",
+            "icon_pad_right": "pe-7",
             "clear_icon_size": "xs",
         },
         "sm": {
-            "input": "h-8 px-3 text-xs",
-            "icon_pad_left": "pl-8",
-            "icon_pad_right": "pr-8",
+            "input": "h-8 px-3 text-sm",
+            "icon_size": "sm",
+            "icon_left": "start-3",
+            "icon_right": "end-3",
+            "icon_pad_left": "ps-9",
+            "icon_pad_right": "pe-9",
             "clear_icon_size": "xs",
         },
         "md": {
             "input": "h-10 px-3 text-sm",
-            "icon_pad_left": "pl-10",
-            "icon_pad_right": "pr-10",
+            "icon_size": "md",
+            "icon_left": "start-3",
+            "icon_right": "end-3",
+            "icon_pad_left": "ps-10",
+            "icon_pad_right": "pe-10",
             "clear_icon_size": "sm",
         },
         "lg": {
             "input": "h-12 px-4 text-base",
-            "icon_pad_left": "pl-12",
-            "icon_pad_right": "pr-12",
+            "icon_size": "md",
+            "icon_left": "start-4",
+            "icon_right": "end-4",
+            "icon_pad_left": "ps-11",
+            "icon_pad_right": "pe-11",
             "clear_icon_size": "sm",
         },
         "xl": {
             "input": "h-14 px-5 text-lg",
-            "icon_pad_left": "pl-14",
-            "icon_pad_right": "pr-14",
+            "icon_size": "lg",
+            "icon_left": "start-5",
+            "icon_right": "end-5",
+            "icon_pad_left": "ps-14",
+            "icon_pad_right": "pe-14",
             "clear_icon_size": "md",
         },
     },

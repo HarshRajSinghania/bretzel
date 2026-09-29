@@ -62,7 +62,7 @@ _CLASS_KWARGS = frozenset({"classes", "class_"})
 #: the ``f"bg-{color}/10"`` this rule catches is precisely
 #: ``bg-(--bz-bg)`` plus ``f"bz-c-{color}"``. Without this exemption, the
 #: rule would refuse its own solution — measured on 2026-08-30 on the
-#: playground's ``/theme-studio`` page.
+#: theme studio page (now ``examples/showcase``'s ``/studio``).
 _GENERATED_PREFIXES = ("bz-c-",)
 
 
@@ -86,7 +86,7 @@ def _completes_a_class(node: ast.JoinedStr) -> bool:
 
 def check(module: Module) -> list[Finding]:
     findings: list[Finding] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         if not isinstance(node, ast.Call):
             continue
         for keyword in node.keywords:

@@ -53,6 +53,9 @@ import ast
 from bretzel.lint.corpus import Module
 from bretzel.lint.report import Finding
 
+#: Built once: an inline ``A | B`` is rebuilt for every node walked.
+_WITH = (ast.With, ast.AsyncWith)
+
 RULE = "test-client-without-lifespan"
 
 _CLIENT = "TestClient"
@@ -67,7 +70,7 @@ def _is_client_call(node: ast.AST) -> bool:
     return isinstance(func, ast.Attribute) and func.attr == _CLIENT
 
 
-def _context_exprs(tree: ast.AST) -> tuple[list[ast.expr], set[str]]:
+def _context_exprs(module: Module) -> tuple[list[ast.expr], set[str]]:
     """What a ``with`` opens: the expressions, and the names.
 
     The two halves serve two distinct forms — ``with TestClient(app)`` on
@@ -76,8 +79,8 @@ def _context_exprs(tree: ast.AST) -> tuple[list[ast.expr], set[str]]:
     """
     exprs: list[ast.expr] = []
     names: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.With | ast.AsyncWith):
+    for node in module.nodes:
+        if not isinstance(node, _WITH):
             continue
         for item in node.items:
             exprs.append(item.context_expr)
@@ -88,7 +91,7 @@ def _context_exprs(tree: ast.AST) -> tuple[list[ast.expr], set[str]]:
 
 def check(module: Module) -> list[Finding]:
     """The test clients that will never enter the lifespan."""
-    opened, opened_names = _context_exprs(module.tree)
+    opened, opened_names = _context_exprs(module)
     opened_ids = {id(e) for e in opened}
 
     # Each suspect carries its SUBJECT: the name it is bound to,
@@ -96,7 +99,7 @@ def check(module: Module) -> list[Finding]:
     # good reason — a message that does not name its subject can only be
     # asserted on its prose, and a mutation then goes unnoticed.
     suspects: list[tuple[ast.Call, str]] = []
-    for node in ast.walk(module.tree):
+    for node in module.nodes:
         # A bare statement: `TestClient(app)` alone on its line, or
         # `TestClient(app).get(...)`, which can no longer open anything.
         if isinstance(node, ast.Expr):

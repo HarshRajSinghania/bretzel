@@ -11,8 +11,12 @@ it. The browser receives targeted HTML updates through a small runtime built on
 HTMX and idiomorph: no React application, no duplicated client store and no npm
 pipeline to operate in production.
 
-> **Alpha:** the first public candidate is `0.1.0a1`. APIs may change between
+> **Alpha:** the latest public alpha is `0.1.0a2`. APIs may change between
 > alpha releases; only the latest alpha receives fixes.
+
+See it first: [component gallery](https://ui.bretzel-py.dev) ·
+[documentation](https://docs.bretzel-py.dev) ·
+[live Kanban](https://demo.bretzel-py.dev).
 
 ## Quickstart
 

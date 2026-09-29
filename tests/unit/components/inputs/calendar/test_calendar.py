@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 
 import pytest
 
@@ -222,12 +223,20 @@ class TestRenderPickerMode:
         # dérobait entre deux clics dessus. Un token par palier, donc,
         # et ``w-fit`` doit avoir DISPARU — les deux cohabiteraient sinon
         # sur le même élément, et Tailwind trancherait par l'ordre de sa
-        # feuille.
-        assert "w-fit" not in html
-        assert " w-69 " in html.replace('"', " "), (
+        # feuille. Lu sur la RACINE : ``min-w-fit`` des en-têtes de
+        # colonne contient la sous-chaîne.
+        root = re.search(r'<bz-calendar[^>]*?\sclass="([^"]*)"', html)
+        assert root, "la racine <bz-calendar> n'a pas de class"
+        tokens = root.group(1).split()
+        assert "w-fit" not in tokens
+        assert "w-69" in tokens, (
             "le palier md ne déclare plus sa largeur — cf. "
             "tests/consistency/test_a_size_step_declares_the_same_keys.py"
         )
+        # Et cette largeur est un PLANCHER (2026-09-29) : le texte, en
+        # paliers typographiques, ne suit pas la densité — la racine
+        # doit pouvoir s'élargir plutôt que laisser les noms se chevaucher.
+        assert "min-w-max" in tokens
 
     def test_renders_header_with_nav_buttons(self) -> None:
         html = _render()

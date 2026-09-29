@@ -19,13 +19,13 @@ post-action client-state patches. Layer 6 wraps it in a Starlette
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
 from bretzel.core import call_without_blocking
-from bretzel.core.escape import escape_attr, escape_html
 from bretzel.core.serialize import serialize
 from bretzel.core.tree import Element, Node
 from bretzel.render.context import RenderContext, use_context
@@ -37,7 +37,8 @@ from bretzel.render.decorators.refreshable import (
 from bretzel.render.fusion import BZ_ID_ATTR, fuse_or_wrap
 from bretzel.render.types import BretzelApp
 from bretzel.runtime.envelope import serialize_patch
-from bretzel.runtime.protocol import HEADER_ZONE_HASHES
+from bretzel.runtime.protocol import HEADER_ZONE_HASHES, TITLE_EVENT
+from bretzel.state.persistence.client_bridge import instance_key
 from bretzel.state.scopes.client import ClientState, rendering_scope
 
 #: The ``<template>`` whose content the runtime projects under
@@ -179,6 +180,13 @@ async def render_partial(
     if notif_html:
         pieces.append(notif_html)
 
+    # A zone that rendered ``ui.title`` changes the tab too: a partial
+    # response has no ``<head>``, so the title rides ``HX-Trigger``, the
+    # same event a partial navigation uses. Only when a zone SET it —
+    # otherwise every click would push the decorator's title back.
+    if ctx.head_title:
+        push_title(ctx, ctx.head_title)
+
     body = "\n".join(pieces)
     return RenderResult(
         body=body,
@@ -187,6 +195,30 @@ async def render_partial(
         new_cookies=dict(ctx.new_cookies),
         deleted_cookies=set(ctx.deleted_cookies),
     )
+
+
+def push_title(ctx: RenderContext, title: str) -> None:
+    """Announce ``title`` to the runtime through ``HX-Trigger``.
+
+    MERGED into a trigger already set (``ctx.set_header("HX-Trigger",
+    …)`` in a handler) rather than written over it: a response carries a
+    single ``HX-Trigger`` header, and the app's event and the title must
+    both arrive. htmx accepts a JSON object or a comma-separated list of
+    names; the second is read as names with no detail.
+    """
+    current = ctx.response_headers.get("HX-Trigger", "")
+    events: dict[str, Any] = {}
+    if current:
+        try:
+            parsed = json.loads(current)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            events = parsed
+        else:
+            events = {n.strip(): None for n in current.split(",") if n.strip()}
+    events[TITLE_EVENT] = title
+    ctx.response_headers["HX-Trigger"] = json.dumps(events)
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -495,13 +527,20 @@ def _zone_ids_inside(root: Node, *, among: set[str]) -> set[str]:
 def _render_delta(ctx: RenderContext, *, include_unchanged: bool = False) -> str:
     """Build the ``<bz-patch>`` tag for the response (V3 wire format).
 
-    Default mode walks the registry's *dirty* :class:`ClientState`
-    instances and serialises their patches — the action-response flow,
-    where the runtime already has fresh state for every instance and
-    only the changed ones need patching.
+    Default mode is the action-response flow: the *dirty*
+    :class:`ClientState` instances are PUSHED — the server mutated them
+    on purpose, it wins —, and the instances the browser did not send
+    are SEEDED. A refreshed zone can reference an instance the page never
+    rendered before (a panel that appears with the first message), and
+    the runtime then has nothing for it: its bindings read ``undefined``,
+    its persistence is never registered, and the next action sends the
+    word ``"undefined"`` back. A seed only creates what is missing
+    (``$bz._store.seed``), so seeding an instance the browser does hold —
+    a ``send_to_server=False`` one, which is never sent — costs bytes,
+    not its value.
 
     ``include_unchanged=True`` switches to the partial-nav flow : every
-    instance the registry knows about is emitted, dirty or not. Used
+    instance the registry knows about is seeded, dirty or not. Used
     when a partial response lands on the runtime for the first time
     (htmx swap of the outlet) and the new page references ClientStates
     the runtime has never seen.
@@ -509,16 +548,23 @@ def _render_delta(ctx: RenderContext, *, include_unchanged: bool = False) -> str
     Returns an empty string when nothing needs sending (callers can
     decide not to append anything).
     """
-    if ctx.state_registry is None:
+    registry = ctx.state_registry
+    if registry is None:
         return ""
     clients = [
-        inst
-        for inst in ctx.state_registry._instances.values()
-        if isinstance(inst, ClientState) and (include_unchanged or inst._dirty)
+        inst for inst in registry._instances.values() if isinstance(inst, ClientState)
     ]
-    if not clients:
-        return ""
-    return serialize_patch(clients, include_unchanged=include_unchanged)
+    if include_unchanged:
+        return serialize_patch(clients, include_unchanged=True) if clients else ""
+    pushed = [inst for inst in clients if inst._dirty]
+    unseen = [
+        inst
+        for inst in clients
+        if not inst._dirty and instance_key(inst) not in registry._client_payload
+    ]
+    return (serialize_patch(unseen, include_unchanged=True) if unseen else "") + (
+        serialize_patch(pushed) if pushed else ""
+    )
 
 
 # ───────────────────────────────────────────────────────────────────────────

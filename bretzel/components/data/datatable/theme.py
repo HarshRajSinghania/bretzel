@@ -121,13 +121,22 @@ DATATABLE_THEME: dict[str, Any] = {
         # with no ``display:flex``), and the two tokens no longer acted
         # on anything.
         "head_button": (
-            "!justify-start !h-auto !px-1 !py-0.5 -mx-1 "
+            "!justify-start !h-auto !px-1 !py-0.5 "
             "!rounded !text-sm !font-semibold !normal-case !tracking-normal "
             "not-disabled:hover:!text-text gap-1"
         ),
         # Non-sortable headers keep the same box so a sortable and a
         # static column don't sit two pixels apart.
         "head_static": "inline-flex items-center py-0.5",
+    },
+    # The negative margin that cancels ``head_button``'s ``px-1``, on the
+    # side the column aligns to — so the header text lands on the same
+    # pixel as the cells below. A ``-mx-1`` on both sides put the label
+    # of a right-aligned column 3 px past its figures.
+    "head_button_aligns": {
+        "left": "-ms-1",
+        "center": "",
+        "right": "-me-1",
     },
     # The composed children's own size tokens, derived from the
     # Datatable's — a literal ``Pagination(size="sm")`` would leave the

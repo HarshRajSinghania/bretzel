@@ -120,7 +120,7 @@ def _consequence(shipped: str, written: str) -> tuple[str, str]:
 
 def check(module: Module) -> list[Finding]:
     """The theme overrides whose shape contradicts the shipped theme."""
-    calls = list(component_maps(module.tree))
+    calls = list(component_maps(module))
     if not calls:
         return []
 

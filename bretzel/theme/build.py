@@ -135,15 +135,36 @@ def download_binary() -> Path:
 #: What Tailwind reads besides the input CSS: it scans the workspace
 #: looking for classes. These folders carry none, or none that are live,
 #: and including them would make the fingerprint a needless cost.
+#:
+#: With :func:`_pruned`, the rules of :func:`bretzel.lint.corpus.discover`.
+#: Written twice: the theme may not import the lint (``.importlinter``),
+#: and sharing from the theme would give the extractable lint a new
+#: public symbol to depend on.
+#: ``tests/consistency/test_the_prod_css_declares_its_scan_roots.py``
+#: holds the two walks to the same tree.
 _SCAN_SKIP: frozenset[str] = frozenset({
-    ".bretzel", ".git", ".venv", "venv", "__pycache__", "node_modules",
-    ".mypy_cache", ".pytest_cache", ".ruff_cache", "build", "dist",
-    "archive",          # V1 is READ-ONLY by charter, it does not move
+    "__pycache__", "venv", "site-packages", "node_modules", "build", "dist",
 })
+
+#: Skipped only directly under a root: this repository's V1, READ-ONLY by
+#: charter, does not move. Deeper, ``archive`` is an app's code like any
+#: other (``features/archive/``).
+_ROOT_SKIP: frozenset[str] = frozenset({"archive"})
 
 #: The extensions a class can live in. A `.py` carries some (component
 #: themes are Python), an `.html` does too.
 _SCAN_SUFFIXES: frozenset[str] = frozenset({".py", ".html", ".js", ".md"})
+
+
+def _pruned(folder: Path, name: str) -> bool:
+    """Whether the walk skips the subfolder ``name`` of ``folder``: a
+    listed name, a hidden folder, or a virtual environment whatever its
+    name, known by its ``pyvenv.cfg`` (PEP 405)."""
+    return (
+        name in _SCAN_SKIP
+        or name.startswith(".")
+        or (folder / name / "pyvenv.cfg").is_file()
+    )
 
 
 def _content_fingerprint(roots: Sequence[Path]) -> str:
@@ -175,11 +196,21 @@ def _content_fingerprint(roots: Sequence[Path]) -> str:
     in production mode.
     """
     parts: list[str] = []
-    for root in roots:
+    # A subfolder that is itself a root is left to that root: each file
+    # is read once, however the roots nest — and a root below a pruned
+    # folder (the package in the app's own ``.venv``) is still read.
+    unique = dict.fromkeys(roots)
+    for root in unique:
         prefix = root.as_posix()
         for folder, subfolders, filenames in os.walk(root):
-            subfolders[:] = [d for d in subfolders if d not in _SCAN_SKIP]
             base = Path(folder)
+            at_root = base == root
+            subfolders[:] = [
+                d for d in subfolders
+                if not _pruned(base, d)
+                and base / d not in unique
+                and not (at_root and d in _ROOT_SKIP)
+            ]
             for name in filenames:
                 if os.path.splitext(name)[1] not in _SCAN_SUFFIXES:
                     continue
@@ -218,9 +249,8 @@ def scan_roots(theme_css: str) -> list[Path]:
     The ``cwd`` opens the list because Tailwind scans it by itself, with
     no directive saying so.
 
-    A root nested inside another is dropped: walking it twice would
-    double the walk's cost without changing a single entry (both passes
-    would produce the same prefix for the same files).
+    A root nested inside another stays in the list: the walk leaves its
+    folder to it (:func:`_content_fingerprint`).
     """
     roots: list[Path] = [Path.cwd().resolve()]
     for raw in _SOURCE_PATH_RE.findall(theme_css):
@@ -232,13 +262,7 @@ def scan_roots(theme_css: str) -> list[Path]:
             # so as not to bring the cache computation down.
             continue
         roots.append(path)
-    # Pruning the nested ones, in both directions: the normal case of
-    # the repository in development is ``cwd`` = the repository root, so
-    # the package is INSIDE it and must not be walked a second time.
-    return [
-        r for r in roots
-        if not any(other != r and other in r.parents for other in roots)
-    ]
+    return roots
 
 
 def _theme_digest(theme_css: str) -> str:

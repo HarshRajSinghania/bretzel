@@ -33,12 +33,28 @@ lit en ``utf-8-sig`` et **lève** sur un fichier illisible. Le motif
 ``except …: continue`` autour d'une lecture ou d'un parse n'est donc plus
 seulement découragé, il est refusé — et ``errors="ignore"`` avec lui.
 
+Le même silence, à l'import
+----------------------------
+Une gate qui IMPORTE les modules qu'elle balaie perd pareil un module
+qui ne s'importe pas. ``test_one_zone_per_table`` le faisait sous un
+``except Exception: continue`` — et sous ``pytest -n``, un échec qui ne
+frappe qu'un worker (une base SQLite recréée par un voisin) lui fait
+collecter une autre liste que les autres : xdist refuse alors toute la
+suite, en désignant des identifiants innocents (mesuré le 2026-09-26).
+Un ``except Exception`` ou ``BaseException`` muet autour d'un
+``import_module`` est donc refusé aussi.
+
 Ce qu'elle ne peut PAS attraper
 --------------------------------
 Un ``except`` qui journalise puis continue (elle ne cherche que le corps
 vide), et un balayage qui filtre trop en amont — un ``rglob`` sur un
 sous-répertoire trop étroit lit tout ce qu'il voit, il voit juste trop
 peu. C'est le travail du plancher, pas le sien.
+
+Ni un ``except ImportError: continue`` autour d'un import : c'est la
+forme d'une question légitime (« ce composant a-t-il un module de
+thème ? », « quel est le plus long préfixe importable ? »), mais elle
+avale aussi un ``ImportError`` levé À L'INTÉRIEUR du module sondé.
 """
 
 from __future__ import annotations
@@ -48,9 +64,15 @@ from pathlib import Path
 
 import pytest
 
-#: Preuve de morsure : il fabrique le motif exact interdit (un ``except SyntaxError:
-#: continue`` autour d'un ``read_text``) et verifie que le detecteur le
-#: voit.
+from tests.consistency._discovery import (
+    called_names,
+    except_names,
+    is_silent_handler,
+)
+
+#: Preuve de morsure : il fabrique les motifs exacts interdits (un
+#: ``except … : continue`` autour d'un ``read_text`` ou d'un
+#: ``import_module``) et leurs jumeaux licites, et les passe au détecteur.
 MUTATION_PROOF = "test_sweep_is_not_vacuous"
 
 _GATES_DIR = Path(__file__).resolve().parent
@@ -74,28 +96,15 @@ _ALLOWED_FILES = frozenset({"_discovery.py"})
 _VALUE_PARSERS = frozenset({"literal_eval", "tokenize"})
 
 
-def _handler_names(handler: ast.ExceptHandler) -> set[str]:
-    node = handler.type
-    if isinstance(node, ast.Name):
-        return {node.id}
-    if isinstance(node, ast.Tuple):
-        return {e.id for e in node.elts if isinstance(e, ast.Name)}
-    if isinstance(node, ast.Attribute):
-        return {node.attr}
-    return set()
+#: Ce qu'on rattrape quand on IMPORTE un module pour le balayer.
+#: ``ImportError`` n'y est pas : cf. « Ce qu'elle ne peut PAS attraper ».
+_IMPORT_SWALLOWERS = frozenset({"Exception", "BaseException"})
 
-
-def _calls_in(node: ast.AST) -> set[str]:
-    """Les noms appelés dans un sous-arbre — ``ast.parse`` → ``parse``."""
-    out = set()
-    for sub in ast.walk(node):
-        if isinstance(sub, ast.Call):
-            func = sub.func
-            if isinstance(func, ast.Attribute):
-                out.add(func.attr)
-            elif isinstance(func, ast.Name):
-                out.add(func.id)
-    return out
+#: ``(appels qui chargent l'objet balayé, exceptions qui le font taire)``.
+_SWALLOWED = (
+    (frozenset({"parse", "read_text", "open", "read_bytes"}), _FILE_READ_ERRORS),
+    (frozenset({"import_module"}), _IMPORT_SWALLOWERS),
+)
 
 
 def _gate_files() -> list[Path]:
@@ -105,35 +114,30 @@ def _gate_files() -> list[Path]:
     )
 
 
-@pytest.mark.parametrize("path", _gate_files(), ids=lambda p: p.name)
-def test_no_silent_skip_on_unreadable_file(path: Path) -> None:
-    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+def _silent_skips(tree: ast.AST) -> list[str]:
+    """Les ``except`` muets autour d'une lecture ou d'un import — le détecteur."""
     offenders: list[str] = []
-
     for node in ast.walk(tree):
         if not isinstance(node, ast.Try):
             continue
-        called = _calls_in(node) - _VALUE_PARSERS
-        # Un ``try`` qui ne lit ni ne parse un FICHIER ne nous regarde pas.
-        if not called & {"parse", "read_text", "open", "read_bytes"}:
+        called = called_names(node)
+        if called & _VALUE_PARSERS:
             continue
-        if _calls_in(node) & _VALUE_PARSERS:
-            continue
-        for handler in node.handlers:
-            if not (_handler_names(handler) & _FILE_READ_ERRORS):
+        for loaders, swallowers in _SWALLOWED:
+            # Un ``try`` qui ne charge rien de balayé ne nous regarde pas.
+            if not called & loaders:
                 continue
-            body = handler.body
-            silent = (len(body) == 1 and isinstance(
-                body[0], (ast.Continue, ast.Pass)
-            )) or (
-                len(body) == 1
-                and isinstance(body[0], ast.Return)
-                and isinstance(body[0].value, ast.Constant)
-                and body[0].value.value is None
-            )
-            if silent:
-                offenders.append(f"ligne {handler.lineno}")
+            offenders += [
+                f"ligne {handler.lineno}"
+                for handler in node.handlers
+                if except_names(handler) & swallowers and is_silent_handler(handler)
+            ]
+    return offenders
 
+
+@pytest.mark.parametrize("path", _gate_files(), ids=lambda p: p.name)
+def test_no_silent_skip_on_unreadable_file(path: Path) -> None:
+    offenders = _silent_skips(ast.parse(path.read_text(encoding="utf-8-sig")))
     assert not offenders, (
         f"{path.name} fait sortir un fichier de son balayage sans un mot "
         f"({', '.join(offenders)}). Un fichier illisible qui disparaît est "
@@ -142,7 +146,8 @@ def test_no_silent_skip_on_unreadable_file(path: Path) -> None:
         f"BOM UTF-8 sur bretzel/render/__init__.py qui a fait sortir ce "
         f"fichier du balayage de SEPT gates pendant des mois.\n\n"
         f"Utilise ``_discovery.parsed_sources(root, floor=…)`` : elle lit "
-        f"en utf-8-sig et LÈVE sur un fichier illisible."
+        f"en utf-8-sig et LÈVE sur un fichier illisible. Pour un import, "
+        f"accumule les échecs et ``assert`` à la fin, comme elle."
     )
 
 
@@ -181,10 +186,12 @@ def test_no_gate_reads_with_errors_ignored(path: Path) -> None:
 def test_sweep_is_not_vacuous() -> None:
     """Plancher : on lit de vraies gates, et le motif reste détectable.
 
-    Le second assert est le point délicat. Les deux tests ci-dessus sont
-    des INTERDICTIONS : ils passeraient tout aussi bien si ``_calls_in``
-    cessait de reconnaître quoi que ce soit. On vérifie donc sur un
-    échantillon fabriqué que le détecteur mord encore.
+    Le second temps est le point délicat. Les deux tests ci-dessus sont
+    des INTERDICTIONS : ils passeraient tout aussi bien si ``called_names``
+    cessait de reconnaître quoi que ce soit. On vérifie donc sur des
+    échantillons fabriqués que LE détecteur — ``_silent_skips``, celui
+    que la gate appelle, pas une copie — mord encore, et qu'il épargne
+    les jumeaux licites.
     """
     files = _gate_files()
     assert len(files) >= 40, (
@@ -192,23 +199,18 @@ def test_sweep_is_not_vacuous() -> None:
         f"découverte est cassée."
     )
 
-    probe = ast.parse(
-        "for p in paths:\n"
-        "    try:\n"
-        "        t = ast.parse(p.read_text(encoding='utf-8'))\n"
-        "    except SyntaxError:\n"
-        "        continue\n"
-    )
-    caught = False
-    for node in ast.walk(probe):
-        if isinstance(node, ast.Try) and _calls_in(node) & {"parse", "read_text"}:
-            for handler in node.handlers:
-                if _handler_names(handler) & _FILE_READ_ERRORS and len(
-                    handler.body
-                ) == 1 and isinstance(handler.body[0], ast.Continue):
-                    caught = True
-    assert caught, (
-        "Le détecteur ne reconnaît plus le motif exact qu'il existe pour "
-        "interdire — vérifie ``_calls_in`` et ``_handler_names`` avant de "
-        "croire que les gates sont saines."
-    )
+    def skips(body: str, handler: str) -> list[str]:
+        return _silent_skips(ast.parse(
+            f"for p in paths:\n    try:\n        {body}\n"
+            f"    {handler}\n        continue\n"
+        ))
+
+    read = "t = ast.parse(p.read_text(encoding='utf-8'))"
+    load = "m = importlib.import_module(p)"
+    assert skips(read, "except SyntaxError:"), "lecture muette non vue"
+    assert skips(load, "except Exception:"), "import muet non vu"
+    assert skips(load, "except:"), "import muet sous ``except:`` nu non vu"
+    # Les jumeaux licites : sonder l'existence d'un module, et un
+    # ``except`` qui ne vise pas une erreur de lecture.
+    assert not skips(load, "except ImportError:"), "faux positif sur la sonde"
+    assert not skips(read, "except KeyError:"), "faux positif hors lecture"

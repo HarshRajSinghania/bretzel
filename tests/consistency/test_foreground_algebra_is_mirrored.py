@@ -41,7 +41,7 @@ import re
 import pytest
 
 from bretzel.theme import palette
-from examples.playground.features.theme_studio import FOREGROUND_JS
+from examples.showcase.lib.studio import FOREGROUND_JS
 
 #: Preuve de morsure : l'introspection rend encore des constantes.
 MUTATION_PROOF = "test_the_constant_set_is_non_trivial"
@@ -109,7 +109,7 @@ def test_the_foreground_algebra_is_mirrored_in_js(
         f"plus la même paire que le CSS généré, et rien à l'écran ne le "
         f"dira — c'est une teinte légèrement fausse, pas une erreur.\n"
         f"  Répare `FOREGROUND_JS` dans "
-        f"`examples/playground/features/theme_studio.py`."
+        f"`examples/showcase/lib/studio.py`."
     )
 
 
@@ -121,7 +121,7 @@ def test_the_studio_writes_the_pair_not_just_the_background() -> None:
     exactement l'état d'avant le 2026-08-30, où seul ``--color-<nom>``
     était écrit.
     """
-    from examples.playground.features.theme_studio import repaint_effect
+    from examples.showcase.lib.studio import repaint_effect
 
     effect = repaint_effect()
     assert "window.bzFg(" in effect, (

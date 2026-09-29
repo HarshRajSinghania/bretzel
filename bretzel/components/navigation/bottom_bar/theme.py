@@ -201,7 +201,7 @@ BOTTOM_BAR_ITEM_THEME: dict[str, Any] = {
         # probe only read the HORIZONTAL axis (``scrollWidth``), so it
         # was green while the text was cut off vertically. A clipping
         # defect is measured on both axes.
-        "label": "max-w-full truncate text-[11px] leading-tight",
+        "label": "max-w-full truncate text-xs leading-tight",
         # ⚠️ The badge is in TWO slots, and the split is load-bearing.
         #
         # ``badge`` = the PLACEMENT alone. It applies to any chip,
@@ -227,13 +227,20 @@ BOTTOM_BAR_ITEM_THEME: dict[str, Any] = {
         # white would disappear. The chip's colour, for its part, stays
         # hard-coded ``error``: a notification is red whatever the tab's
         # colour.
+        #
+        # ``max-w-none!``: in ``absolute``, the chip's containing block is
+        # the icon wrapper (~20 px), and ``ui.badge`` caps its root at
+        # ``min(16rem, 100%)`` — a percentage of THAT box. "9+" came out
+        # as "9.." (``tests/runtime_js/test_a_tab_badge_shows_its_whole_count.py``).
+        # Important because both classes set ``max-width`` on the same
+        # node, and the sheet's order, not the attribute's, would decide.
         "badge": (
-            "absolute -top-1 left-full -ml-1 "
+            "absolute -top-1 left-full -ml-1 max-w-none! "
             "inline-flex items-center justify-center"
         ),
         "badge_pill": (
             "min-w-4 h-4 px-1 rounded-full "
-            "bg-error text-error-foreground text-[10px] font-semibold "
+            "bg-error text-error-foreground text-xs font-semibold "
             "leading-none"
         ),
     },

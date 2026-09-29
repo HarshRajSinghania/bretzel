@@ -105,6 +105,9 @@ nom qui **n'a jamais existé dans tout l'historique git**, inventé en
 4. Les fichiers `.md` de ce dossier — la gate ne balaie que `bretzel/**/*.py`.
    Les chemins qu'ils citent sont gardés séparément par
    `tests/consistency/test_documented_paths_exist.py`.
+5. Une commande `bretzel …` citée entre backticks : elle passe le vrai
+   parseur de la CLI, dans le code comme dans ce dossier —
+   `tests/consistency/test_a_cited_command_parses.py`.
 
 ---
 

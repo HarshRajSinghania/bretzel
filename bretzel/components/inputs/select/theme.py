@@ -166,7 +166,7 @@ SELECT_THEME: dict[str, Any] = {
     # (measured 2026-07-28). Three gaps are STRUCTURAL: combobox carries
     # ``input`` and ``empty`` which select does not have (no client
     # filter → never a "no results" state), and its ``trigger`` uses
-    # ``min-h-[2.5rem]`` where select freezes ``h-10`` — the same height,
+    # ``min-h-10`` where select freezes ``h-10`` — the same height,
     # expressed differently because the combobox's trigger grows with its
     # pills.
     #
@@ -185,16 +185,16 @@ SELECT_THEME: dict[str, Any] = {
             "option": "text-xs",
             "check_icon_size": "xs",
             "panel": "max-h-48",
-            "header_counter": "text-[10px]",
-            "header_btn_primary": "text-[10px]",
-            "header_btn_muted": "text-[10px]",
+            "header_counter": "text-xs",
+            "header_btn_primary": "text-xs",
+            "header_btn_muted": "text-xs",
             "pill_size": "xs",
             "chevron_size": "xs",
             "clear_icon_size": "xs",
         },
         "sm": {
-            "trigger": "h-8 px-3 text-xs",
-            "option": "text-xs",
+            "trigger": "h-8 px-3 text-sm",
+            "option": "text-sm",
             "check_icon_size": "xs",
             "panel": "max-h-52",
             "header_counter": "text-xs",
