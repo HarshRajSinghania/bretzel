@@ -103,7 +103,8 @@ instead combines typed state and declared dependencies with targeted
 server-rendered fragments, multi-user updates and 100+ integrated components,
 without a Node or Bun build pipeline. Coming from Streamlit or Dash, you keep
 the Python-first workflow and gain explicit state with partial updates instead
-of reruns or callback wiring.
+of reruns or callback wiring. The detailed comparison, with sources:
+<https://docs.bretzel-py.dev/compare>.
 
 ## Repository
 

@@ -85,6 +85,7 @@ NAV = [
         ("Introduction", "/", "compass", ""),
         ('Start in 5 minutes', "/quickstart", "rocket", ""),
         ('Understand Bretzel', "/how", "book-open", ""),
+        ('How it compares', "/compare", "scale", ""),
         ('Describe the UI', "/describe", "layout-template", ""),
         # Le jumeau du précédent : l'un dit ce qui existe, l'autre juge
         # ce qu'on en a fait. Ils se lisent l'un après l'autre.

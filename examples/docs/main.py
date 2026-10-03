@@ -154,6 +154,7 @@ from examples.docs.features import (      # noqa: E402 — marks ramassées par 
     check,
     charts,
     cheatsheet,
+    compare,
     components,
     config,
     describe,
@@ -184,7 +185,7 @@ from examples.docs.features import (      # noqa: E402 — marks ramassées par 
 # ⚠️ `stubs` DOIT rester après les vrais chapitres : il lit leurs
 # marques `@page` pour savoir lesquels sont livrés.
 app.include(
-    home, quickstart, how, describe, check,
+    home, quickstart, how, compare, describe, check,
     state_server, state_client,
     actions_server, actions_client,
     reactivity_server, reactivity_client,
