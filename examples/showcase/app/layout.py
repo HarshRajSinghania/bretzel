@@ -16,6 +16,20 @@ DOCS = "https://docs.bretzel-py.dev"
 # The picture a shared link shows; absolute, served by the landing.
 SHARE_IMAGE = "https://bretzel-py.dev/assets/bretzel-mark.png"
 
+# The footer menu: the colour scheme, then the other public Bretzel sites
+# — the same list, in the same order, as in the docs' footer.
+SCHEMES: tuple[tuple[str, str, str], ...] = (
+    ("light", "Light theme", "sun"),
+    ("dark", "Dark theme", "moon"),
+    ("system", "System theme", "monitor"),
+)
+SITES: tuple[tuple[str, str, str], ...] = (
+    ("Website", "globe", "https://bretzel-py.dev"),
+    ("Documentation", "book-open", DOCS),
+    ("Live Kanban", "kanban", "https://demo.bretzel-py.dev"),
+    ("GitHub", "github", GITHUB),
+)
+
 
 def identity_menu() -> None:
     with ui.dropdown(
@@ -70,10 +84,13 @@ def shell() -> None:
                 with ui.sidebar_section(label=group):
                     for slug, label, icon in entries:
                         ui.sidebar_item(label, icon=icon, href=f"/{slug}")
-            with ui.sidebar_footer(name="Bretzel", subtitle="Documentation & source"):
-                ui.sidebar_footer_item(label="Documentation", icon_left="book-open",
-                                       href=DOCS)
-                ui.sidebar_footer_item(label="GitHub", icon_left="github", href=GITHUB)
+            with ui.sidebar_footer(name="Bretzel", subtitle="v0.1.0a2 · Early alpha"):
+                for value, label, icon in SCHEMES:
+                    ui.sidebar_footer_item(label=label, icon_left=icon,
+                                           on_click=ColorScheme.set(value))
+                ui.divider(classes="my-1")
+                for label, icon, href in SITES:
+                    ui.sidebar_footer_item(label=label, icon_left=icon, href=href)
         with ui.pane(gap="lg", padding="lg", classes="max-md:p-4"):
             theme_bar(sidebar if mobile else None)
             # The outlet is the page's own column: its sections are its

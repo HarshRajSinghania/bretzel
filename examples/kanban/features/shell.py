@@ -176,7 +176,7 @@ def dialogue_nouvelle() -> None:
               size="md", icon_left="plus", on_click=boite.open())
 
 
-@refreshable(deps=[Tableau])
+@refreshable(deps=[Tableau], broadcast=[Tableau])
 def commandes() -> None:
     """Undo and redo. Their tooltips say WHAT they would undo.
 

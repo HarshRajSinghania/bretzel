@@ -12,6 +12,15 @@ targeted HTML updates through a small runtime built on HTMX and idiomorph: no
 React application, no duplicated client store and no npm pipeline to operate in
 production.
 
+<p align="center">
+  <a href="https://demo.bretzel-py.dev">
+    <img src="assets/demo/kanban-two-windows.gif" width="900"
+         alt="The Kanban example open in two windows: a card dragged to Done in the left window appears in the right one with its activity line, then Undo in the right window moves it back in both.">
+  </a>
+  <br>
+  <sub>One Python app, two windows: drag on the left, the right follows; undo on the right, both follow. No JavaScript written.</sub>
+</p>
+
 > **Alpha:** the latest public alpha is `0.1.0a2`. APIs may change between
 > alpha releases; only the latest alpha receives fixes.
 

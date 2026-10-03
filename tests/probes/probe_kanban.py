@@ -216,6 +216,33 @@ def chaque_session_a_son_tableau(page_a, page_b) -> None:
           f"{avant_b} → {cartes_de(page_b, 'fini')}")
 
 
+# ── ①bis Un visiteur, deux onglets, un tableau ────────────────────────
+
+
+def deux_onglets_se_suivent(ctx_a, page_a) -> None:
+    """L'autre moitié de ① : isoler les visiteurs ne doit pas couper
+    un visiteur de lui-même. Deux onglets d'un même navigateur sont une
+    session ; ce que l'un glisse arrive dans l'autre sans qu'il touche à
+    rien — le geste que la démo montre."""
+    print("\n①bis Un visiteur, deux onglets")
+    page_a2 = ctx_a.new_page()
+    page_a2.goto(BASE + "/")
+    pret(page_a2)
+    page_a.bring_to_front()
+
+    avant = cartes_de(page_a2, "fini")
+    source = page_a.locator(
+        '[data-bz-dropzone="a_faire"] [data-bz-draggable]').first
+    zone = glisser(page_a, source, "fini")
+    check("l'onglet 1 lâche la carte dans « Terminé »", zone == "fini",
+          f"lâchée dans {zone!r}")
+    page_a2.wait_for_timeout(2500)
+    check("l'onglet 2 la voit arriver sans rien faire",
+          cartes_de(page_a2, "fini") == avant + 1,
+          f"{avant} → {cartes_de(page_a2, 'fini')}")
+    page_a2.close()
+
+
 # ── ② Le serveur arbitre : la limite d'en-cours refuse ────────────────
 
 
@@ -617,6 +644,7 @@ def main() -> int:
 
             chaque_session_a_son_tableau(page_a, page_b)
             ctx_b.close()
+            deux_onglets_se_suivent(ctx_a, page_a)
 
             la_limite_refuse(page_a)
             reordonner(page_a)

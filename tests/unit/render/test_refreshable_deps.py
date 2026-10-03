@@ -198,11 +198,13 @@ class _FakeBroker:
     def __init__(self) -> None:
         self.published: list[str] = []
 
-    def publish(self, qualname: str, *, except_tab: str = "") -> None:
-        # ``except_tab`` : l'onglet émetteur, que le vrai courtier
-        # saute. Le double le reçoit et l'ignore — ce qu'il mesure,
-        # c'est QUELS canaux sont publiés, pas à qui.
-        del except_tab
+    def publish(self, qualname: str, *, except_tab: str = "",
+                only_session: str = "") -> None:
+        # ``except_tab`` / ``only_session`` : l'onglet émetteur et la
+        # session visée, que le vrai courtier applique. Le double les
+        # reçoit et les ignore — ce qu'il mesure, c'est QUELS canaux sont
+        # publiés, pas à qui.
+        del except_tab, only_session
         self.published.append(qualname)
 
     def subscribe(self, session_id: str, qualname: str) -> None:  # noqa: D401

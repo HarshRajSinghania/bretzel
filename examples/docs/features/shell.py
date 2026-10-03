@@ -42,6 +42,14 @@ class DocsNavigation(ClientState):
 # a crawler reads it outside any page; served by the landing.
 SHARE_IMAGE = "https://bretzel-py.dev/assets/bretzel-mark.png"
 
+# The other public Bretzel sites, for the footer menu: (label, icon, url).
+SITES: tuple[tuple[str, str, str], ...] = (
+    ("Website", "globe", "https://bretzel-py.dev"),
+    ("Component gallery", "shapes", "https://ui.bretzel-py.dev"),
+    ("Live Kanban", "kanban", "https://demo.bretzel-py.dev"),
+    ("GitHub", "github", "https://github.com/JeanHoccart/bretzel"),
+)
+
 # (section, [(label, href, icon, blurb)]) — le blurb ne sert QU'au stub
 # d'un chapitre pas encore écrit ; il ne décide plus de rien (cf.
 # ``stubs.py``, qui dérive la livraison de la marque ``@page``).
@@ -182,16 +190,13 @@ def shell() -> None:
                         icon_left=icon,
                         on_click=ColorScheme.set(value),
                     )
-                # Le lien croisé. ``sidebar_title`` ramène déjà à ``/``
-                # (son ``href`` par défaut), donc une entrée « Accueil »
-                # ne servirait à rien — la place va à l'aller-retour entre
-                # les deux apps de démo, qui tournent côte à côte en dev.
-                # Le port est en dur parce que la cible est un AUTRE
-                # serveur : rien côté doc ne peut le connaître.
-                ui.sidebar_footer_item(
-                    label="GitHub", icon_left="github",
-                    href="https://github.com/JeanHoccart/bretzel",
-                )
+                ui.divider(classes="my-1")
+                # The way to the other public Bretzel sites — the same
+                # list, in the same order, in the gallery's footer. The
+                # docs themselves are left out: ``sidebar_title`` already
+                # leads home.
+                for label, icon, href in SITES:
+                    ui.sidebar_footer_item(label=label, icon_left=icon, href=href)
         with ui.pane(
             gap="none",
             padding="lg",

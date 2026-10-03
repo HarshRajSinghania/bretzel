@@ -199,9 +199,14 @@ def bande_archive() -> None:
                 size="sm", color="error")
 
 
-@refreshable(deps=[Tableau, Filtres])
+@refreshable(deps=[Tableau, Filtres], broadcast=[Tableau])
 def plateau() -> None:
-    """The four columns of the current session's board."""
+    """The four columns of the current session's board.
+
+    ``broadcast=[Tableau]``: a second window of the same visitor follows
+    the first. ``Tableau`` is a ``SessionState``, so the signal stays in
+    this session — other visitors are neither reached nor re-rendered.
+    """
     with ui.vstack(gap="sm",
                    classes="flex-1 min-h-0 min-w-0 px-5 pt-5 pb-3"):
         with ui.hstack(gap="lg", align="stretch",
@@ -211,7 +216,7 @@ def plateau() -> None:
         bande_archive()
 
 
-@refreshable(deps=[Tableau])
+@refreshable(deps=[Tableau], broadcast=[Tableau])
 def activite() -> None:
     """The current board's history, newest at the top.
 

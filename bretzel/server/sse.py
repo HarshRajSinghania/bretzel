@@ -120,13 +120,17 @@ class SSEBroker(Protocol):
         """
         ...
 
-    def publish(self, state_qualname: str, *, except_tab: str = "") -> None:
+    def publish(
+        self, state_qualname: str, *, except_tab: str = "", only_session: str = ""
+    ) -> None:
         """Push a ``state-dirty`` signal to every CONNECTION subscribed
         to ``state_qualname`` (one per open tab). Returns immediately;
         delivery is async via per-connection queues.
 
         ``except_tab`` skips the tab that has just written — it already
-        received its zones in its action's response.
+        received its zones in its action's response. ``only_session``,
+        when set, restricts delivery to that session's tabs (the scope of
+        a ``SessionState``).
         """
         ...
 
@@ -365,7 +369,9 @@ class MemoryBroker:
 
     # ── Publish ───────────────────────────────────────────────────────
 
-    def publish(self, state_qualname: str, *, except_tab: str = "") -> None:
+    def publish(
+        self, state_qualname: str, *, except_tab: str = "", only_session: str = ""
+    ) -> None:
         """Push a ``state-dirty`` event to every CONNECTION of every
         session subscribed to ``state_qualname``.
 
@@ -382,12 +388,21 @@ class MemoryBroker:
 
         ⚠️ We exclude the TAB, not the session. Two tabs of the same
         person must keep seeing each other.
+
+        ``only_session`` narrows delivery to ONE session: a
+        ``SessionState`` belongs to its session, so its change concerns
+        that session's other tabs and nobody else. Without it, every
+        visitor's tab refetches its own, unchanged zone on each gesture
+        of each other visitor: on the public Kanban, a board per visitor,
+        one drag would cost one re-render per connected tab.
         """
         if not state_qualname:
             return
         sessions = self._subscribers.get(state_qualname)
         if not sessions:
             return
+        if only_session:
+            sessions = {only_session} & sessions
         chunk = _format_event(SSE_EVENT_STATE_DIRTY, state_qualname)
         # Snapshot with ``list(...)`` : a put_nowait below could race a
         # concurrent teardown mutating these sets.
@@ -480,7 +495,9 @@ class RedisBroker:
 
     # ── Publish : cross-worker via Redis Pub/Sub ──────────────────────
 
-    def publish(self, state_qualname: str, *, except_tab: str = "") -> None:
+    def publish(
+        self, state_qualname: str, *, except_tab: str = "", only_session: str = ""
+    ) -> None:
         """PUBLISH the signal to the shared channel. Returns immediately;
         every worker's listener (this one included) does the local fanout.
 
@@ -489,16 +506,17 @@ class RedisBroker:
         fired as a background task so this stays non-blocking, matching the
         :class:`SSEBroker` contract.
 
-        ``except_tab`` travels WITH the signal, separated by a tab
-        character: the tab to exclude may hold its connection on a
-        different worker from the publishing one, so the exclusion cannot
-        be applied here. A tab character cannot appear in a Python
-        qualname nor in a tab identifier, which is hexadecimal.
+        ``except_tab`` and ``only_session`` travel WITH the signal,
+        separated by tab characters: the tab to exclude, or the session to
+        target, may hold its connection on a different worker from the
+        publishing one, so neither filter can be applied here. A tab
+        character cannot appear in a Python qualname, in a tab identifier
+        (hexadecimal) nor in a session identifier (URL-safe token).
         """
         if not state_qualname:
             return
-        charge = (f"{state_qualname}	{except_tab}" if except_tab
-                  else state_qualname)
+        charge = (f"{state_qualname}	{except_tab}	{only_session}"
+                  if except_tab or only_session else state_qualname)
         task = asyncio.create_task(
             self._client.publish(self._channel, charge)
         )
@@ -531,8 +549,10 @@ class RedisBroker:
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
             if data:
-                qualname, _, except_tab = data.partition("	")
-                self._local.publish(qualname, except_tab=except_tab)
+                qualname, _, rest = data.partition("	")
+                except_tab, _, only_session = rest.partition("	")
+                self._local.publish(qualname, except_tab=except_tab,
+                                    only_session=only_session)
 
     async def aclose(self) -> None:
         """Cancel the listener, unsubscribe, and close the client. Called on

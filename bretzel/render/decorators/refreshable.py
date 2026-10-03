@@ -566,10 +566,16 @@ def enqueue_deps(ctx: Any, changed_classes: set[type]) -> None:
                 queue.append(zone)
 
 
-def _publish_broadcast(ctx: Any, qualnames: Iterable[str]) -> None:
-    """Push an SSE ``state-dirty`` for each state qualname to every
-    subscribed connection (tab). No-op when no broker is wired (test rigs
-    bypassing the lifecycle).
+def _publish_broadcast(ctx: Any, states: Iterable[type]) -> None:
+    """Push an SSE ``state-dirty`` for each state to every subscribed
+    connection (tab). No-op when no broker is wired (test rigs bypassing
+    the lifecycle).
+
+    A ``SessionState`` reaches only the tabs of the session that changed
+    it (``only_session``): it is that session's own data, so the other
+    sessions have nothing to refetch. The other scopes reach every
+    subscribed session — an ``AppState`` is shared by design, and the
+    broker does not know which sessions belong to one user.
 
     ⚠️ **The tab that has just written is EXCLUDED** since 2026-09-09. It
     already received its zones in its action's response; its re-read
@@ -593,8 +599,11 @@ def _publish_broadcast(ctx: Any, qualnames: Iterable[str]) -> None:
     if broker is None:
         return
     emitter = getattr(ctx, "tab_id", "") or ""
-    for qualname in qualnames:
-        broker.publish(qualname, except_tab=emitter)
+    session = getattr(ctx, "session_id", "") or ""
+    for cls in states:
+        scoped = getattr(cls, "__scope__", None) == "session"
+        broker.publish(state_qualname(cls), except_tab=emitter,
+                       only_session=session if scoped else "")
 
 
 def broadcast_deps(ctx: Any, changed_classes: set[type]) -> None:
@@ -611,9 +620,7 @@ def broadcast_deps(ctx: Any, changed_classes: set[type]) -> None:
     # 2026-08-23 fix plays out. A zone broadcasting on ``Deals`` and
     # ALSO reading a personal preference publishes nothing when it is the
     # preference that moves: the preference is not in this index.
-    to_publish = [
-        state_qualname(cls) for cls in changed_classes if _ZONES_BY_CHANNEL.get(cls)
-    ]
+    to_publish = [cls for cls in changed_classes if _ZONES_BY_CHANNEL.get(cls)]
     if to_publish:
         _publish_broadcast(ctx, to_publish)
 
@@ -681,4 +688,4 @@ def refresh(zone_or_name: RefreshableHandle | str) -> None:
     # subscribed tab ; the acting tab additionally gets the local OOB
     # swap enqueued just above.
     if zone.broadcast:
-        _publish_broadcast(ctx, zone._broadcast_qualnames())
+        _publish_broadcast(ctx, zone.broadcast)

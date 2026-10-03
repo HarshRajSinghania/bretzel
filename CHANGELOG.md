@@ -7,6 +7,20 @@ change between alpha releases.
 
 ## [Unreleased]
 
+### Changed
+
+- A `broadcast=[State]` signal for a `SessionState` now reaches only the tabs
+  of the session that changed it; other sessions are no longer asked to
+  refetch their own, unchanged zone. `AppState` and the other scopes still
+  reach every subscribed session.
+- Python 3.14 is tested in CI and declared in the package metadata.
+
+### Fixed
+
+- The Kanban example's windows follow each other again: the board stays one
+  per visitor, and two tabs of the same browser share it live.
+- The vendor download message is in English.
+
 ## [0.1.0a2] - 2026-09-29
 
 ### Added

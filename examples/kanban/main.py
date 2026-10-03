@@ -2,20 +2,18 @@
 
 Run: ``py -m examples.kanban.main`` (port 8009).
 
-⚠️ **What follows is what the app is FOR, and the code no longer does
-it.** ``donnees.Tableau`` became a ``SessionState`` in ``75f9a702``, so
-the board is per-visitor: two windows no longer share anything, and the
-SSE broadcast has nobody to reach. Measured on 2026-09-20 —
-``tests/probes/probe_kanban.py`` ① fails on its two checks ("B sees the
-card arrive without having done anything", "B's activity feed says who
-did it"), and it already failed before this file was touched. Either the
-scope goes back to ``AppState``, or this docstring and the probe stop
-promising a shared board. Written here rather than quietly corrected:
-the choice is not a translator's to make.
+**One board per visitor, shared by that visitor's windows.**
+``donnees.Tableau`` is a ``SessionState`` since ``75f9a702``, on purpose:
+on the public demo, a board common to every visitor would let anyone
+write anything for everyone to read. Its windows still share it — two
+tabs of the same browser are one session — and the broadcast reaches
+exactly them: a ``SessionState`` signal stays in its session (decided on
+2026-10-03, ``tests/integration/server/test_a_session_state_broadcast_
+stays_in_its_session.py``), so other visitors are neither reached nor
+re-rendered. An ``AppState`` board would be shared by everyone, with the
+same code.
 
-What this example shows, and why it exists. The board is an
-``AppState``: a SINGLE object every open window talks about. Each zone
-declares two distinct lists —
+Each zone declares two distinct lists —
 
     @refreshable(deps=[Tableau, Filtres], broadcast=[Tableau])
 
@@ -28,9 +26,9 @@ team work again at every keystroke of a single person.
 
 **The trial that proves something is done with TWO windows.** One shows
 nothing: it would have re-rendered its own zone anyway. Open the app
-twice side by side — a private window to be somebody else — and drag a
-card on the left: it moves on the right, and the activity feed writes
-there who did it.
+twice side by side in the same browser and drag a card on the left: it
+moves on the right, and the activity feed writes there who did it. (A
+private window is another session, hence another board.)
 
 **Drag and drop** is the board's verb, and the server arbitrates it. "En
 cours" and "En revue" carry a work-in-progress limit; beyond it, the
