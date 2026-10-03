@@ -180,6 +180,16 @@ viewport. Le contrôle « ça ne sort pas de l'écran » le laissait passer.
 > **Gaté depuis** — `test_a_closed_overlay_is_out_of_the_tab_order.py`
 > pour les composants, et le balayage de `bretzel.probe` pour les apps.
 
+**C6. Un contrôle qui bascule reste à sa place.** Ouvrir puis fermer un
+panneau, et mesurer le bouton dans les deux états.
+
+> *Payé* : le panneau d'activité du kanban et son rail replié étaient
+> deux éléments échangés par `visible=`, chacun avec son bouton — à deux
+> hauteurs différentes, donc le bouton sautait sous le doigt. Un seul
+> panneau dont la LARGEUR suit l'état (`style=` lié, animé en CSS) garde
+> le bouton immobile. Mesuré au pixel : la bordure de 1 px suffisait à le
+> décaler une fois replié.
+
 ---
 
 ## D. Avant de dire « c'est livré »

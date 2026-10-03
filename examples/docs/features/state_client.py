@@ -32,7 +32,8 @@ def echo_demo() -> None:
             ui.text(echo.text, weight="bold", classes="font-mono")
 
 
-@page(PATH, layout=shell, title='Client state')
+@page(PATH, layout=shell, title="Client state · Bretzel docs",
+      description="Client state in Bretzel: typed state that lives in the browser for pure UI such as open panels, filters and preferences.")
 def state_client_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

@@ -36,6 +36,10 @@ change between alpha releases.
 
 ### Fixed
 
+- `Bretzel(description=…)` is now the `<meta name="description">` of every page
+  that declares none, as the configuration documented; it was never rendered.
+- The package metadata points to the website, documentation, component gallery
+  and issue tracker instead of the repository README.
 - The README quickstart and the playground theme defaults.
 - Test collection on a clean CI environment for every supported Python.
 - The atelier example initializes its schema before importing its features.

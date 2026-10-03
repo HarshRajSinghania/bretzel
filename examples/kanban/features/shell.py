@@ -4,11 +4,15 @@
 own. It is mandatory for a board — a full column pushing the page down
 would take the other three along and the banner with them.
 
+**One row**, read left to right as a sentence: which board, which cards,
+what I can do. The project and its sprint, then the filters, then the
+history, the display settings, who I am, and the one creative action.
+
 **The filter controls live HERE, outside any ``@refreshable`` zone.** A
 zone containing the search field would re-render it at every debounced
 keystroke, and the cursor would go back to the start of the word. The
-banner is therefore rendered once; only the commands that depend on the
-board (undo, redo, the archive) are a zone.
+banner is therefore rendered once; only what depends on a mutable state
+(the undo history, who I am) is a zone.
 
 **No ``ui.sidebar``, like the mail client and for the same reason**: the
 app has one screen. A kanban's navigation is its columns.
@@ -33,18 +37,18 @@ from examples.kanban.features.donnees import (
     ETIQUETTES,
     INITIALES,
     MEMBRES,
+    NOMS,
     Tableau,
     colonnes,
 )
 from examples.kanban.features.logic import (
     annuler,
-    archiver_ouverte,
-    changer_de_membre,
     creer,
+    devenir,
     filtrer,
     refaire,
 )
-from examples.kanban.features.state import Filtres, Moi, Nouvelle, Vue
+from examples.kanban.features.state import Filtres, Moi, Nouvelle
 
 
 @refreshable(deps=[Moi])
@@ -53,33 +57,35 @@ def identite() -> None:
 
     Two windows of the same browser share the cookie, hence the same
     identity. To be somebody else you need a private window — or this
-    selector, which is enough to see a journal signed by two hands.
+    menu, which is enough to see a journal signed by two hands.
 
-    ⚠️ **It is a ZONE, and it took a bug to write it.** The shell is
-    rendered ONCE: anything reading a mutable state there without being a
-    zone is frozen for the life of the page. The selector, for its part,
-    updated on its own — it is a bound control, its value lives in the
-    browser — so the screen showed the new name beside the OLD avatar,
-    and nothing flagged the contradiction. ``examples/messagerie``'s
-    shell carries the same warning, written three days earlier and for
-    the same reason.
+    ⚠️ **It is a ZONE.** The shell is rendered ONCE: anything reading a
+    mutable state there without being a zone is frozen for the life of
+    the page, and the trigger would keep showing the previous person.
 
     ``deps=[Moi]`` alone, with no ``broadcast``: who I am concerns only
     me.
     """
-    moi = Moi()
-    with ui.hstack(align="center", gap="xs", classes="shrink-0"):
-        ui.avatar(initials=INITIALES[moi.membre], size="xs",
-                  color=COULEURS[moi.membre])
-        ui.select(
-            value=moi.membre,
-            options=[(cle, nom) for cle, nom, _, _ in MEMBRES],
-            on_change=changer_de_membre,
-            size="sm",
-            classes="w-44",
+    moi = Moi().membre
+    with ui.dropdown(
+        trigger=ui.button(
+            NOMS[moi].split()[0], variant="ghost", size="md",
+            icon_left=ui.avatar(variant="solid", initials=INITIALES[moi], size="xs",
+                                color=COULEURS[moi]),
+            icon_right="chevron-down",
             tooltip=tr("Who you are on this board",
                        "Qui tu es sur ce tableau"),
-        )
+        ),
+        align="end",
+    ):
+        for cle, nom, initiales, couleur in MEMBRES:
+            ui.dropdown_item(
+                label=nom,
+                icon_left=ui.avatar(variant="solid", initials=initiales, size="xs",
+                                    color=couleur),
+                icon_right="check" if cle == moi else None,
+                on_click=partial(devenir, cle),
+            )
 
 
 def connexion() -> None:
@@ -91,9 +97,8 @@ def connexion() -> None:
     live = LiveConnection()
     with ui.hstack(align="center", gap="xs", classes="shrink-0"):
         ui.icon("radio", color="success", size="sm", visible=live.connected,
-                tooltip=tr("Shared board — the other windows follow",
-                           "Tableau partagé — les autres fenêtres "
-                           "suivent"))
+                tooltip=tr("Live — your other windows follow",
+                           "En direct — tes autres fenêtres suivent"))
         ui.icon("radio", color="muted", size="sm", visible=~live.connected,
                 tooltip=tr("Stream interrupted", "Flux interrompu"))
 
@@ -117,20 +122,36 @@ def langue() -> None:
     """
     code = Language().code
     with ui.dropdown(
-        trigger=ui.icon_button("languages", variant="ghost", size="sm",
+        trigger=ui.icon_button("languages", variant="ghost", size="md",
                                tooltip=tr("Language", "Langue")),
         align="end",
     ):
-        ui.dropdown_item(
-            label="English" + (" ✓" if code.startswith("en") else ""),
-            icon_left="languages",
-            on_click=partial(Language.set, "en"),
-        )
-        ui.dropdown_item(
-            label="Français" + (" ✓" if code.startswith("fr") else ""),
-            icon_left="languages",
-            on_click=partial(Language.set, "fr"),
-        )
+        for cle, libelle in (("en", "English"), ("fr", "Français")):
+            ui.dropdown_item(
+                label=libelle,
+                icon_right="check" if code.startswith(cle) else None,
+                on_click=partial(Language.set, cle),
+            )
+
+
+def theme_sombre() -> None:
+    """Light / dark, one button each and CSS shows the right one.
+
+    Two buttons rather than one whose icon would depend on the scheme:
+    the scheme lives in the browser, so the server cannot pick the icon.
+    """
+    ui.icon_button(
+        "moon", variant="ghost", size="md",
+        on_click=ColorScheme.toggle(),
+        tooltip=tr("Switch to dark", "Passer en sombre"),
+        classes="dark:!hidden",
+    )
+    ui.icon_button(
+        "sun", variant="ghost", size="md",
+        on_click=ColorScheme.toggle(),
+        tooltip=tr("Switch to light", "Passer en clair"),
+        classes="!hidden dark:!inline-flex",
+    )
 
 
 def dialogue_nouvelle() -> None:
@@ -152,23 +173,24 @@ def dialogue_nouvelle() -> None:
             ui.button(tr("Create", "Créer"), type="submit",
                       color="primary", icon_left="plus")
     ui.button(tr("New card", "Nouvelle carte"), color="primary",
-              size="sm", icon_left="plus", on_click=boite.open())
+              size="md", icon_left="plus", on_click=boite.open())
 
 
-@refreshable(deps=[Tableau, Vue])
+@refreshable(deps=[Tableau])
 def commandes() -> None:
-    """Undo, redo, and the archive zone. Broadcast to the others.
+    """Undo and redo. Their tooltips say WHAT they would undo.
 
-    They are a zone because they describe the board: the number of
-    possible undos changes when anybody writes, here or elsewhere.
-    ``broadcast=[Tableau]`` makes the other windows follow — without it,
-    an "Annuler" button would stay greyed out at the neighbour's while
-    there is something to undo.
+    A zone because they describe the board: the number of possible undos
+    changes with every write.
+
+    Archiving has no button here: it acts on ONE card, so it lives with
+    the card — the strip that appears under the board while one drags,
+    and the drawer's button.
     """
     tableau = Tableau()
-    with ui.hstack(align="center", gap="xs", classes="shrink-0"):
+    with ui.hstack(align="center", gap="none", classes="shrink-0"):
         ui.icon_button(
-            "undo-2", variant="ghost", size="sm", on_click=annuler,
+            "undo-2", variant="ghost", size="md", on_click=annuler,
             disabled=tableau.curseur == 0,
             tooltip=(
                 tr("Undo: ", "Annuler : ")
@@ -178,7 +200,7 @@ def commandes() -> None:
             ),
         )
         ui.icon_button(
-            "redo-2", variant="ghost", size="sm", on_click=refaire,
+            "redo-2", variant="ghost", size="md", on_click=refaire,
             disabled=tableau.curseur >= len(tableau.journal),
             tooltip=(
                 tr("Redo: ", "Rétablir : ")
@@ -187,99 +209,81 @@ def commandes() -> None:
                 else tr("Nothing to redo", "Rien à rétablir")
             ),
         )
-        # ⚠️ A BUTTON here, and the drop zone is elsewhere — under the
-        # columns. The first version put the ``ui.dropzone`` in this row,
-        # and the drag engine REPARENTS the moved node into the hovered
-        # zone: the target went from 104×32 to 362×105, and the whole
-        # banner from 93 to 166 px tall. The entire bar jumped under the
-        # pointer, at the precise moment one is aiming.
-        #
-        # It is the base layer's optimistic model, not a defect: on drop,
-        # the DOM order IS the result. But a zone that will never show
-        # what it receives has no business in a row of controls — it is
-        # rule A2 of ``livrer-une-app.md``, written the same day and
-        # which I had broken.
-        ui.button(
-            tr("Archive", "Archiver"), variant="outline", size="sm",
-            icon_left="archive",
-            on_click=archiver_ouverte, disabled=not Vue().ouverte,
-            tooltip=tr("Archive the open card — or drop one on the "
-                       "strip, at the foot of the board",
-                       "Archiver la carte ouverte — ou lâche-en une "
-                       "sur la bande, en bas du tableau"),
-        )
+
+
+def filtres_du_bandeau() -> None:
+    """Search, assignee, label — the three server-side filters.
+
+    The assignee is a row of avatars and not a list: on a board one
+    recognises a face before a name, and the current filter stays in
+    sight instead of folded into a closed select.
+    """
+    filtres = Filtres()
+    # ``debounce`` on the field: one request per typing pause, not one
+    # per character. The filtering is SERVER side here — cf.
+    # ``state.Filtres``, which says why the mail client's client-side
+    # filter would be a bug on a board whose cards get dragged.
+    ui.input(
+        value=filtres.q, on_input=filtrer, debounce=350,
+        placeholder=tr("Search a card", "Rechercher une carte"),
+        icon_left="search", size="md", clearable=True,
+        classes="w-[15rem]",
+    )
+    with ui.toggle_group(value=filtres.qui, on_change=filtrer, size="md",
+                         color="primary"):
+        ui.toggle_button(value="tous", label=tr("All", "Tous"),
+                         tooltip=tr("The whole team", "Toute l'équipe"))
+        for cle, nom, initiales, couleur in MEMBRES:
+            ui.toggle_button(
+                value=cle,
+                icon=ui.avatar(variant="solid", initials=initiales, size="xs", color=couleur),
+                tooltip=tr(f"{nom}'s cards", f"Les cartes de {nom}"),
+            )
+    ui.select(
+        value=filtres.etiquette, on_change=filtrer, size="md",
+        classes="w-[9rem]",
+        options=[("toutes", tr("All labels", "Toutes étiquettes")),
+                 *[(cle, lib) for cle, lib, _ in ETIQUETTES]],
+    )
 
 
 @layout
 def shell() -> None:
-    filtres = Filtres()
     with ui.viewport(direction="col"):
-        with ui.vstack(gap="none",
-                       classes="border-b border-text/10 shrink-0"):
-            with ui.hstack(justify="between", align="center", gap="md",
-                           classes="px-4 pt-2.5 pb-2"):
-                with ui.hstack(align="center", gap="sm"):
-                    ui.icon("kanban", color="primary", size="lg")
+        with ui.hstack(justify="between", align="center", gap="md",
+                       wrap=True,
+                       classes="shrink-0 px-5 py-4 border-b "
+                               "border-text/10"):
+            with ui.hstack(align="center", gap="lg", wrap=True):
+                with ui.hstack(align="center", gap="sm", classes="shrink-0"):
+                    with ui.hstack(align="center", justify="center",
+                                   classes="bz-c-primary h-10 w-10 "
+                                           "rounded-field bg-(--bz-solid) "
+                                           "text-(--bz-on-solid)"):
+                        ui.icon("kanban", size="md")
                     ui.heading(tr("Client portal rework",
                                   "Refonte du portail client"),
-                               level=1, size="md")
-                    ui.badge("Sprint 24", variant="soft", color="muted",
-                             size="xs")
-                with ui.hstack(align="center", gap="sm"):
-                    connexion()
-                    identite()
-                    ui.icon_button(
-                        "moon", variant="ghost", size="sm",
-                        on_click=ColorScheme.toggle(),
-                        tooltip=tr("Switch to dark", "Passer en sombre"),
-                        classes="dark:!hidden",
-                    )
-                    ui.icon_button(
-                        "sun", variant="ghost", size="sm",
-                        on_click=ColorScheme.toggle(),
-                        tooltip=tr("Switch to light", "Passer en clair"),
-                        classes="!hidden dark:!inline-flex",
-                    )
-                    langue()
+                               level=1, size="md", weight="semibold")
+                    ui.badge("Sprint 24", variant="soft", color="primary",
+                             size="md")
+                with ui.hstack(align="center", gap="md", wrap=True):
+                    filtres_du_bandeau()
 
-            with ui.hstack(justify="between", align="center", gap="sm",
-                           wrap=True, classes="px-4 pb-2.5"):
-                with ui.hstack(align="center", gap="sm"):
-                    # ``debounce`` on the field: one request per typing
-                    # pause, not one per character. The filtering is
-                    # SERVER side here — cf. ``state.Filtres``, which
-                    # says why the mail client's client-side filter would
-                    # be a bug on a board whose cards get dragged.
-                    ui.input(
-                        value=filtres.q, on_input=filtrer, debounce=350,
-                        placeholder=tr("Search a card",
-                                       "Rechercher une carte"),
-                        icon_left="search", size="sm", clearable=True,
-                        classes="w-72",
-                    )
-                    ui.select(
-                        value=filtres.qui, on_change=filtrer, size="sm",
-                        classes="w-44",
-                        options=[("tous", tr("The whole team",
-                                             "Toute l'équipe")),
-                                 *[(cle, nom) for cle, nom, _, _ in MEMBRES]],
-                    )
-                    ui.select(
-                        value=filtres.etiquette, on_change=filtrer, size="sm",
-                        classes="w-40",
-                        options=[("toutes", tr("All labels",
-                                               "Toutes étiquettes")),
-                                 *[(cle, lib) for cle, lib, _ in ETIQUETTES]],
-                    )
-                with ui.hstack(align="center", gap="sm"):
-                    commandes()
-                    dialogue_nouvelle()
+            with ui.hstack(align="center", gap="sm", classes="shrink-0"):
+                connexion()
+                commandes()
+                ui.divider(orientation="vertical", classes="h-6")
+                theme_sombre()
+                langue()
+                identite()
+                dialogue_nouvelle()
 
         ui.outlet(classes="flex-1 min-h-0 flex")
 
 
 feature = Feature(
     name="shell", kind="shell",
-    provides=[shell, identite, connexion, dialogue_nouvelle, commandes],
+    provides=[shell, identite, connexion, langue, theme_sombre,
+              dialogue_nouvelle, commandes, filtres_du_bandeau],
     uses=["donnees", "state", "logic"],
 )

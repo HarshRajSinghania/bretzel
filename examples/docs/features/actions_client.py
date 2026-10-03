@@ -12,7 +12,8 @@ from bretzel import page, ui
 from examples.docs.features.shell import shell
 
 
-@page("/actions-client", layout=shell, title="Client actions")
+@page("/actions-client", layout=shell, title="Client actions · Bretzel docs",
+      description="Client actions in Bretzel: run a purely visual interaction in the browser with a client expression on on_<event>=, with no server round trip.")
 def actions_client_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

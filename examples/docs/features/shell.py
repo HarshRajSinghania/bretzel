@@ -37,6 +37,11 @@ class DocsNavigation(ClientState):
 
     query: str = field(default="")
 
+
+# The picture a shared link shows (Slack, LinkedIn, X). Absolute, because
+# a crawler reads it outside any page; served by the landing.
+SHARE_IMAGE = "https://bretzel-py.dev/assets/bretzel-mark.png"
+
 # (section, [(label, href, icon, blurb)]) — le blurb ne sert QU'au stub
 # d'un chapitre pas encore écrit ; il ne décide plus de rien (cf.
 # ``stubs.py``, qui dérive la livraison de la marque ``@page``).
@@ -134,7 +139,9 @@ def shell() -> None:
         property="og:description",
         content="Bretzel documentation for server-driven, reactive Python web apps.",
     )
+    ui.meta_tag(property="og:image", content=SHARE_IMAGE)
     ui.meta_tag(name="twitter:card", content="summary")
+    ui.meta_tag(name="twitter:image", content=SHARE_IMAGE)
     with ui.viewport():
         mobile = Screen().is_mobile
         navigation = DocsNavigation()

@@ -25,6 +25,7 @@ from examples.kanban.features.donnees import (
     INITIALES,
     MEMBRES,
     NOMS,
+    STATUTS,
     Tableau,
     avancement,
     carte_par_id,
@@ -121,14 +122,14 @@ def sous_taches(carte: dict, brouillon: Brouillon) -> None:
             ui.text(tr("Subtasks", "Sous-tâches"), size="xs",
                     weight="medium", color="muted")
             if total:
-                # Two ``ui.text`` and not one f-string: an f-string
-                # around a binding RAISES, and it is a guard rail — it
-                # would freeze the value at render time. The first
-                # follows the client counter, the second is constant.
-                with ui.hstack(gap="none", align="center"):
-                    ui.text(Avancement().faites, size="xs", color="muted")
-                    ui.text(tr(f" of {total}", f" sur {total}"),
-                            size="xs", color="muted")
+                # ``+`` and not an f-string: an f-string around a
+                # binding RAISES, because it would freeze the value at
+                # render time. ``binding + str`` stays ONE reactive text
+                # that follows the client counter (traps.md, « Un
+                # espace en tête d'un texte dans un hstack disparaît »).
+                ui.text(Avancement().faites + tr(f" of {total}",
+                                                 f" sur {total}"),
+                        size="xs", color="muted")
         if total:
             # ``value=`` is a BOUND prop: the bar moves on click, with
             # no round trip. ``color=`` stays server side — a class does
@@ -177,7 +178,7 @@ def commentaires(carte: dict, brouillon: Brouillon) -> None:
                 weight="medium", color="muted")
         for mot in carte["commentaires"]:
             with ui.hstack(gap="sm", align="start"):
-                ui.avatar(initials=INITIALES[mot["qui"]], size="xs",
+                ui.avatar(variant="solid", initials=INITIALES[mot["qui"]], size="sm",
                           color=COULEURS[mot["qui"]])
                 with ui.vstack(gap="none", classes="min-w-0 flex-1"):
                     with ui.hstack(gap="xs", align="center"):
@@ -223,12 +224,10 @@ def tiroir() -> None:
                    on_close=fermer):
         if carte is None:
             return
+        icone, teinte = STATUTS[carte["colonne"]]
         with ui.vstack(gap="md"):
-            with ui.hstack(gap="xs", align="center"):
-                ui.badge(libelles()[carte["colonne"]], size="xs",
-                         variant="soft", color="primary")
-                ui.text(tr(f"Card {carte['id']}", f"Carte {carte['id']}"),
-                        size="xs", color="muted")
+            ui.badge(libelles()[carte["colonne"]], size="md",
+                     variant="soft", color=teinte, icon_left=icone)
             champs(brouillon)
             ui.divider()
             etiquettes(carte)

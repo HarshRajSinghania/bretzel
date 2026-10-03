@@ -231,6 +231,14 @@ flex-1 min-h-0 overflow-y-auto [&>*]:shrink-0
 scroll. Si la racine clippante porte elle-même `shrink-0`, elle n'a pas besoin
 d'être ajoutée à cette liste.
 
+### Un espace en tête d'un texte dans un hstack disparaît
+
+Chaque enfant d'un `ui.hstack` est un élément flex, donc un bloc : son
+espace de tête est avalé. `ui.text(" of 3")` après un compteur rendait
+« 2of 3 » dans le tiroir du kanban, alors que le HTML contient l'espace.
+Un liant et du texte se composent en UN nœud :
+`ui.text(etat.faites + " of 3")` reste réactif (seule la f-string lève).
+
 ### Un champ `w-full` dans un hstack avec wrap forme une pile
 
 `w-full` consomme toute la ligne. Pour une barre qui doit se replier, donner au

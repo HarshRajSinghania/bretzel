@@ -6,10 +6,11 @@
 
 > Server-Driven UI for Python — typed state, zero npm, batteries included.
 
-Bretzel lets Python own the application state and the interface that follows
-it. The browser receives targeted HTML updates through a small runtime built on
-HTMX and idiomorph: no React application, no duplicated client store and no npm
-pipeline to operate in production.
+Bretzel is a full-stack Python web framework for reactive web apps. Python owns
+the application state and the interface that follows it. The browser receives
+targeted HTML updates through a small runtime built on HTMX and idiomorph: no
+React application, no duplicated client store and no npm pipeline to operate in
+production.
 
 > **Alpha:** the latest public alpha is `0.1.0a2`. APIs may change between
 > alpha releases; only the latest alpha receives fixes.
@@ -84,6 +85,16 @@ mutation to other open windows without polling or subscription code.
 Start with `examples/pomodoro` for a small application, `examples/kanban` for
 realtime collaboration, `examples/playground` for the component catalogue and
 `examples/docs` for the live reference.
+
+## How it compares
+
+NiceGUI keeps a live server-side UI object tree, Reflex compiles Python into a
+React application, and FastHTML stays deliberately close to HTML. Bretzel
+instead combines typed state and declared dependencies with targeted
+server-rendered fragments, multi-user updates and 100+ integrated components,
+without a Node or Bun build pipeline. Coming from Streamlit or Dash, you keep
+the Python-first workflow and gain explicit state with partial updates instead
+of reruns or callback wiring.
 
 ## Repository
 

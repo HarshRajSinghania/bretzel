@@ -138,7 +138,8 @@ def parametres_table() -> None:
     )
 
 
-@page(PATH, layout=shell, title='Theme')
+@page(PATH, layout=shell, title="Theme · Bretzel docs",
+      description="Theme a Bretzel app from one Theme object: colours, shapes, stroke and typography, compiled to Tailwind v4 with no Node.js.")
 def theme_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

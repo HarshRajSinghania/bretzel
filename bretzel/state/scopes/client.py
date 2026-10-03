@@ -200,8 +200,8 @@ class ClientBinding:
             f"``f'… {{state.field}} …'`` would freeze the rendered text "
             f"at server-render time, breaking client-side reactivity. "
             f"Either : (a) pass the binding directly — ``ui.text(state.field)`` "
-            f"— so the runtime emits ``bz-text=…``, OR (b) compose adjacent "
-            f"text fragments — ``ui.text('count : '); ui.text(state.field)``. "
+            f"— so the runtime emits ``bz-text=…``, OR (b) concatenate — "
+            f"``ui.text('count : ' + state.field)`` stays one reactive text. "
             f"Path : {self.binding_path()}"
         )
 

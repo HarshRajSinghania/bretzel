@@ -23,7 +23,8 @@ from examples.docs.features.shell import shell
 PATH = "/auth"
 
 
-@page(PATH, layout=shell, title="Authentication")
+@page(PATH, layout=shell, title="Authentication · Bretzel docs",
+      description="Authentication in Bretzel: signed-cookie identity, OAuth and OIDC doors such as Google sign-in, and the one decision your app owns.")
 def auth_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

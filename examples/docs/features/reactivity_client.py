@@ -43,7 +43,8 @@ def number_demo() -> None:
         ui.badge("n > 3", color="success", visible=(num.n > 3))
 
 
-@page(PATH, layout=shell, title='Client reactivity')
+@page(PATH, layout=shell, title="Client reactivity · Bretzel docs",
+      description="Client reactivity in Bretzel: bind a ClientState to a reactive prop and the browser updates the display itself, with no request.")
 def reactivity_client_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

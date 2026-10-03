@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from types import SimpleNamespace
 from typing import Any
 
 from bretzel.core.tree import Element, TextNode
@@ -140,6 +141,26 @@ class TestPageMeta:
         ctx = _ctx(app)
         result = run(render_page(app, home, ctx=ctx))
         assert "<title>Bretzel</title>" in result.body
+
+    def test_app_description_is_the_fallback(self) -> None:
+        """A page without ``description=`` inherits ``Bretzel(description=…)``;
+        a page that declares one keeps its own."""
+        app = _StubApp()
+        app.config = SimpleNamespace(description="The app")  # type: ignore[attr-defined]
+
+        @page("/bare")
+        def bare() -> Element:
+            return Element("p")
+
+        @page("/own", description="The page")
+        def own() -> Element:
+            return Element("p")
+
+        bare_body = run(render_page(app, bare, ctx=_ctx(app))).body
+        own_body = run(render_page(app, own, ctx=_ctx(app))).body
+        assert 'name="description" content="The app"' in bare_body
+        assert 'name="description" content="The page"' in own_body
+        assert "The app" not in own_body
 
 
 # ───────────────────────────────────────────────────────────────────────────

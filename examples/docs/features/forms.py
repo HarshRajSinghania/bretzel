@@ -18,7 +18,8 @@ from examples.docs.features.shell import shell
 PATH = "/forms"
 
 
-@page(PATH, layout=shell, title="Forms")
+@page(PATH, layout=shell, title="Forms · Bretzel docs",
+      description="Forms in Bretzel: ui.form, ui.form_field and validation on the typed state, with accessible error messages and no JavaScript.")
 def forms_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

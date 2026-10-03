@@ -3,10 +3,10 @@
 Seven visual cards : Reference / Slots / Edge cases / Composability /
 A11y / Server playground / Client playground. ``BINDABLE_PROPS =
 ("src", "initials", "status")`` — user data + presence are bindable ;
-size / shape / color stay design-time. No events.
+size / variant / shape / color stay design-time. No events.
 
-Seven props : ``src`` / ``alt`` / ``initials`` / ``size`` / ``shape``
-/ ``color`` / ``status``.
+Eight props : ``src`` / ``alt`` / ``initials`` / ``size`` /
+``variant`` / ``shape`` / ``color`` / ``status``.
 """
 
 from bretzel import refreshable, ui
@@ -20,6 +20,7 @@ PATH = "/avatar"
 
 
 SIZES    = ["xs", "sm", "md", "lg", "xl", "2xl"]
+VARIANTS = ["soft", "solid"]
 SHAPES   = ["circle", "square"]
 COLORS   = ["primary", "secondary", "success", "warning",
             "error", "info", "muted"]
@@ -31,6 +32,7 @@ class AvatarPlayground(PageState):
     alt:         str = field(default="")
     initials:    str = field(default="AD")
     size:        str = field(default="md")
+    variant:     str = field(default="soft")
     shape:       str = field(default="circle")
     color:       str = field(default="primary")
     status:      str = field(default="")
@@ -71,6 +73,7 @@ def parse_extra_attrs(blob: str) -> dict:
 def build_preview(state: AvatarPlayground):
     kwargs: dict = {
         "size": state.size,
+        "variant": state.variant,
         "shape": state.shape,
         "color": state.color,
     }
@@ -127,6 +130,10 @@ def server_panel() -> None:
         with control("size"):
             ui.select(value=state.size,
                       options=[(s, s) for s in SIZES],
+                      on_change=server_changed)
+        with control("variant"):
+            ui.select(value=state.variant,
+                      options=[(v, v) for v in VARIANTS],
                       on_change=server_changed)
         with control("shape"):
             ui.select(value=state.shape,
@@ -240,6 +247,12 @@ def page() -> None:
                     with ui.hstack(gap="lg"):
                         ui.avatar(initials="AB", shape="circle")
                         ui.avatar(initials="AB", shape="square")
+
+                    ui.heading("Variants (soft / solid)", level=3)
+                    with ui.hstack(gap="lg"):
+                        for c in ("primary", "info", "warning"):
+                            ui.avatar(initials="AB", color=c, variant="soft")
+                            ui.avatar(initials="AB", color=c, variant="solid")
 
                     ui.heading("Colors (initials fallback)", level=3)
                     with ui.hstack(wrap=True):

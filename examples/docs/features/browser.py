@@ -43,7 +43,8 @@ def piege(titre: str, texte: str) -> None:
     ui.alert(texte, color="warning", title=titre)
 
 
-@page(PATH, layout=shell, title='The browser')
+@page(PATH, layout=shell, title="The browser · Bretzel docs",
+      description="Reach the user's machine from Python: clipboard, printing, fullscreen, share sheet and vibration through Bretzel's browser verbs.")
 def browser_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

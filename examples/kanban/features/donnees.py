@@ -27,6 +27,7 @@ spot, the floats have no midpoint left to offer. A real app renumbers
 from __future__ import annotations
 
 import time
+from datetime import date, timedelta
 from typing import Any
 
 from bretzel import Feature
@@ -47,6 +48,18 @@ LIMITES: dict[str, int | None] = {
 }
 
 
+#: Each column's status mark: a lucide icon and the colour that paints
+#: it. The shapes follow the usual tracker reading — empty, half full,
+#: dotted, ticked — so the four columns say where a card stands before
+#: their labels are read.
+STATUTS: dict[str, tuple[str, str]] = {
+    "a_faire": ("circle-dashed", "muted"),
+    "en_cours": ("contrast", "warning"),
+    "en_revue": ("circle-dot", "primary"),
+    "fini": ("circle-check", "success"),
+}
+
+
 def colonnes() -> tuple[tuple[str, str, int | None], ...]:
     """``(key, label, limit)`` per column, in board order."""
     return (
@@ -64,11 +77,15 @@ def libelles() -> dict[str, str]:
 #: The team. The key serves as session identity ("you are…") and as a
 #: card's assignee — two roles for one table, because it is the same
 #: person.
+#:
+#: The colours are the four hues ``core/theme.py`` adds to the palette,
+#: not semantic slots: a person is not a status, and the semantic
+#: colours already paint the labels (:data:`ETIQUETTES`).
 MEMBRES: tuple[tuple[str, str, str, str], ...] = (
-    ("cam", "Camille Roux", "CR", "primary"),
-    ("sam", "Samuel Diallo", "SD", "info"),
-    ("noa", "Noa Berger", "NB", "warning"),
-    ("lea", "Léa Marchand", "LM", "success"),
+    ("cam", "Camille Roux", "CR", "berry"),
+    ("sam", "Samuel Diallo", "SD", "ocean"),
+    ("noa", "Noa Berger", "NB", "ember"),
+    ("lea", "Léa Marchand", "LM", "pine"),
 )
 
 NOMS: dict[str, str] = {cle: nom for cle, nom, _, _ in MEMBRES}
@@ -100,7 +117,18 @@ def tache(
     sous_taches: tuple[tuple[str, bool], ...] = (),
     commentaires: tuple[tuple[str, str], ...] = (),
 ) -> dict[str, Any]:
-    """A complete card, with its defaults. The ``rang`` comes after."""
+    """A complete card, with its defaults. The ``rang`` comes after.
+
+    The seeded comments are dated a few hours back, the last one the
+    most recent, so the thread reads as a conversation that happened.
+
+    ⚠️ Counted back from today's MIDNIGHT, not from the clock. The seed
+    is a ``default_factory``, rebuilt at every request until the first
+    write persists the board: a value that moved between two builds
+    would make the framework see a change nobody made, and re-render the
+    whole board on a visitor's first click.
+    """
+    minuit = time.mktime(date.today().timetuple())
     return {
         "id": ident,
         "colonne": colonne,
@@ -112,10 +140,22 @@ def tache(
         "description": description,
         "sous_taches": [{"texte": t, "fait": f} for t, f in sous_taches],
         "commentaires": [
-            {"qui": q, "texte": t, "t": 0.0} for q, t in commentaires
+            {"qui": q, "texte": t,
+             "t": minuit - 4 * 3600 * (len(commentaires) - i)}
+            for i, (q, t) in enumerate(commentaires)
         ],
         "rang": 0.0,
     }
+
+
+def dans(jours: int) -> str:
+    """The ISO date ``jours`` days from today — the seed's due dates.
+
+    Relative, so the public demo never shows a sprint whose every
+    deadline went by months ago: one card is a day late, one is due
+    today, the rest spread over the coming weeks.
+    """
+    return (date.today() + timedelta(days=jours)).isoformat()
 
 
 #: The seed, column by column and in display order. What a real team
@@ -134,7 +174,7 @@ def graine() -> tuple[dict[str, Any], ...]:
             "c01", "a_faire",
             tr("Sign-in screen: forgotten password",
                "Écran de connexion : mot de passe oublié"),
-            "sam", ("ux",), "2026-09-18", 3,
+            "sam", ("ux",), dans(9), 3,
             tr("The link exists but returns a 404 since the routing was "
                "reworked. To be rewired onto the new single-use token "
                "flow.",
@@ -149,7 +189,7 @@ def graine() -> tuple[dict[str, Any], ...]:
             "c02", "a_faire",
             tr("Audit log exportable as CSV",
                "Journal d\'audit exportable en CSV"),
-            "noa", ("infra", "doc"), "2026-09-25", 5,
+            "noa", ("infra", "doc"), dans(14), 5,
             tr("The large accounts ask for it for their internal audits. "
                "One row per action, the export runs as a background task.",
                "Les clients grands comptes le demandent pour leurs audits "
@@ -164,7 +204,7 @@ def graine() -> tuple[dict[str, Any], ...]:
             "c03", "a_faire",
             tr("Fix the VAT computation on credit notes",
                "Corriger le calcul de TVA sur les avoirs"),
-            "lea", ("bug",), "2026-09-15", 2,
+            "lea", ("bug",), dans(2), 2,
             tr("A credit note issued after a rate change applies the day\'s "
                "rate, not the original invoice\'s.",
                "Un avoir émis après un changement de taux applique le taux "
@@ -200,7 +240,7 @@ def graine() -> tuple[dict[str, Any], ...]:
             "c06", "a_faire",
             tr("A ten-minute getting-started guide",
                "Guide de démarrage en dix minutes"),
-            "sam", ("doc",), "2026-10-02", 5,
+            "sam", ("doc",), dans(21), 5,
             tr("The sign-up drop-off rate is decided in the first five "
                "minutes. A written walkthrough, tested on three people.",
                "Le taux d\'abandon à l\'inscription se joue dans les cinq "
@@ -210,7 +250,7 @@ def graine() -> tuple[dict[str, Any], ...]:
         tache(
             "c07", "en_cours",
             tr("Merge duplicate accounts", "Fusion des comptes en double"),
-            "lea", ("bug", "infra"), "2026-09-12", 8,
+            "lea", ("bug", "infra"), dans(1), 8,
             tr("Two accounts created with the same address in upper and in "
                "lower case. They must be merged without losing the "
                "history.",
@@ -229,7 +269,7 @@ def graine() -> tuple[dict[str, Any], ...]:
         tache(
             "c08", "en_cours",
             tr("Dashboard caching", "Cache des tableaux de bord"),
-            "noa", ("perf",), "2026-09-16", 5,
+            "noa", ("perf",), dans(-1), 5,
             tr("The dashboard recomputes twelve aggregates at every load. A "
                "five-minute cache is enough, invalidated on write.",
                "Le tableau de bord recalcule douze agrégats à chaque "
@@ -242,7 +282,7 @@ def graine() -> tuple[dict[str, Any], ...]:
             "c09", "en_cours",
             tr("Date picker accessibility",
                "Accessibilité du sélecteur de dates"),
-            "cam", ("ux", "bug"), "2026-09-19", 3,
+            "cam", ("ux", "bug"), dans(4), 3,
             tr("The calendar cannot be reached from the keyboard, and the "
                "screen reader announces \"button\" without saying which "
                "date.",
@@ -256,7 +296,7 @@ def graine() -> tuple[dict[str, Any], ...]:
             "c10", "en_revue",
             tr("Rate limiting on the public API",
                "Limitation de débit sur l\'API publique"),
-            "sam", ("infra",), "2026-09-11", 5,
+            "sam", ("infra",), dans(0), 5,
             tr("A hundred requests per minute per token, with the standard "
                "headers so the clients know where they stand.",
                "Cent requêtes par minute et par jeton, avec les en-têtes "
@@ -471,17 +511,44 @@ def depuis(instant: float) -> str:
     return tr(f"{ecart // 86400} d ago", f"il y a {ecart // 86400} j")
 
 
-def echeance_lisible(valeur: str) -> str:
-    """``2026-09-18`` → ``18/09``. Empty stays empty."""
-    if not valeur or len(valeur) < 10:
-        return ""
-    return f"{valeur[8:10]}/{valeur[5:7]}"
+MOIS_EN: tuple[str, ...] = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+MOIS_FR: tuple[str, ...] = ("janv.", "févr.", "mars", "avr.", "mai", "juin",
+                            "juil.", "août", "sept.", "oct.", "nov.", "déc.")
+
+
+def echeance(carte: dict[str, Any]) -> tuple[str, str]:
+    """A card's due date as it reads on the board: ``(label, colour)``.
+
+    Near dates are said in words — ``Today``, ``Tomorrow``,
+    ``Yesterday`` — because that is how a team speaks of them; further
+    out, ``Oct 3``. The colour says late (``error``), close (``warning``,
+    two days or less) or calm; a finished card is never late, its date is
+    history. No date, or a malformed one, gives ``("", "muted")``.
+    """
+    try:
+        jour = date.fromisoformat(carte["echeance"])
+    except ValueError:
+        return "", "muted"
+    ecart = (jour - date.today()).days
+    if ecart == 0:
+        libelle = tr("Today", "Aujourd'hui")
+    elif ecart == 1:
+        libelle = tr("Tomorrow", "Demain")
+    elif ecart == -1:
+        libelle = tr("Yesterday", "Hier")
+    else:
+        libelle = tr(f"{MOIS_EN[jour.month - 1]} {jour.day}",
+                     f"{jour.day} {MOIS_FR[jour.month - 1]}")
+    if carte["colonne"] == "fini" or ecart > 2:
+        return libelle, "muted"
+    return libelle, "error" if ecart < 0 else "warning"
 
 
 feature = Feature(
     name="donnees", kind="data",
-    provides=[Tableau, colonnes, libelles, MEMBRES, ETIQUETTES, semer,
-              copie,
+    provides=[Tableau, colonnes, libelles, MEMBRES, ETIQUETTES, STATUTS,
+              semer, copie,
               carte_par_id, colonne_de, occupation, pleine, correspond,
-              avancement, entre, depuis, echeance_lisible],
+              avancement, entre, depuis, echeance],
 )

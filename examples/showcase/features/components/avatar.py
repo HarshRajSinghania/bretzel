@@ -5,7 +5,7 @@ from bretzel.state import ClientState, field
 from examples.showcase.lib.example import example, page_header
 
 SUMMARY = ("A photo when there is one, initials when there is not, and a "
-           "presence dot — six sizes, two shapes.")
+           "presence dot — six sizes, two shapes, a soft or solid fill.")
 
 
 def photos_and_initials() -> None:
@@ -15,6 +15,20 @@ def photos_and_initials() -> None:
         ui.avatar(name="Alan Turing")
         ui.avatar(name="Katherine Johnson", color="secondary")
         ui.avatar(initials="MH", color="success")
+
+
+def card_owners() -> None:
+    with ui.hstack(gap="md", wrap=True, justify="center"):
+        for title, owner, color in (("Rate limiting", "Samuel Diallo",
+                                     "primary"),
+                                    ("Billing migration", "Noa Berger",
+                                     "secondary"),
+                                    ("Cookie banner", "Léa Marchand",
+                                     "violet")):
+            with ui.card(padding="sm", classes="w-[13rem]"), \
+                    ui.hstack(justify="between", align="center"):
+                ui.text(title, size="sm", weight="medium")
+                ui.avatar(name=owner, size="xs", variant="solid", color=color)
 
 
 def sizes() -> None:
@@ -85,6 +99,9 @@ def page() -> None:
     example("Photos and initials", photos_and_initials,
             note="Without src, the initials come from name=; the tint is "
                  "yours to pick.")
+    example("Solid, where a tint would fade", card_owners,
+            note="variant=\"solid\" fills the disc: the owner of a card "
+                 "still reads on a dark surface.")
     example("Sizes", sizes)
     example("Presence", presence,
             note="status= adds the dot: online, away, busy or offline.")

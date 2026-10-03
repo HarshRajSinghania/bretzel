@@ -23,7 +23,8 @@ from examples.docs.features.shell import shell
 PATH = "/lists"
 
 
-@page(PATH, layout=shell, title="Lists and tables")
+@page(PATH, layout=shell, title="Lists and tables · Bretzel docs",
+      description="Lists and tables in Bretzel: render a moving collection without re-rendering the page, with ui.each or ui.datatable.")
 def lists_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

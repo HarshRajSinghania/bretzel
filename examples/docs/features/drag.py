@@ -17,7 +17,8 @@ from examples.docs.features.shell import shell
 PATH = "/drag"
 
 
-@page(PATH, layout=shell, title="Drag and drop")
+@page(PATH, layout=shell, title="Drag and drop · Bretzel docs",
+      description="Drag and drop in Python with Bretzel: ui.draggable and ui.dropzone, and a Move object that the server applies or refuses.")
 def drag_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

@@ -36,7 +36,7 @@ there who did it.
 cours" and "En revue" carry a work-in-progress limit; beyond it, the
 handler mutates nothing — and since the browser had already moved the
 card, the render that contradicts it puts it back. There is no
-``reject()``: refusing is writing nothing. The banner's "Archiver" zone
+``reject()``: refusing is writing nothing. The archive strip under the board
 shows the other door, ``locked=True``: it accepts everything and lets
 nothing leave.
 
@@ -63,6 +63,7 @@ This app does not use the ``Feature`` contracts: app structure is what
 import os
 
 from bretzel import Bretzel
+from examples.kanban.core.theme import THEME
 from examples.kanban.features import (
     donnees,
     fiche,
@@ -82,6 +83,7 @@ app = Bretzel(
     title="Bretzel · Kanban",
     secret_key="dev-kanban-secret-change-me" if MODE == "dev" else None,
     mode=MODE,
+    theme=THEME,
     # English is the source language and the default; French is one
     # click away, in the banner. The app's own sentences go through
     # ``core/i18n.tr``; the framework's own go through ``lang``.

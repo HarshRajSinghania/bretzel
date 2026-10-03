@@ -10,7 +10,8 @@ from bretzel import page, ui
 from examples.docs.features.shell import shell
 
 
-@page("/actions-server", layout=shell, title="Server actions")
+@page("/actions-server", layout=shell, title="Server actions · Bretzel docs",
+      description="Server actions in Bretzel: pass a Python handler to on_<event>= and mutate the typed state on the server in one signed round trip.")
 def actions_server_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

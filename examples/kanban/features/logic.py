@@ -53,7 +53,7 @@ from examples.kanban.features.state import (
 #: own cards — receiving from elsewhere is an opt-in.
 GROUPE = "carte"
 
-#: The ``name=`` of the banner's archive zone. It accepts everything and
+#: The ``name=`` of the archive strip, under the board. It accepts everything and
 #: lets nothing leave (``locked=True``): it is the case the
 #: ``accepts`` / ``locked`` distinction exists to express.
 ZONE_ARCHIVE = "archive"
@@ -215,7 +215,7 @@ def sortir(carte: dict[str, Any]) -> None:
 
 
 def archiver(m: Move) -> None:
-    """Take a card out by dropping it on the banner's archive zone."""
+    """Take a card out by dropping it on the archive strip."""
     carte = carte_par_id(m.item_key)
     if carte is not None:
         sortir(carte)
@@ -451,14 +451,15 @@ def filtrer(filtres: Filtres) -> None:
     """
 
 
-def changer_de_membre(moi: Moi) -> None:
-    """``Moi.membre`` is hydrated by the selector; nothing else to do.
+def devenir(membre: str) -> None:
+    """Change who I am — a row of the banner's avatar menu.
 
     No authentication here, and it is written down: this example stages
-    shared state, not identity — ``examples/auth`` does the other one.
+    the board, not identity — ``examples/auth`` does the other one.
     :class:`Moi`'s validator pulls any unknown value back, so this
     handler has nothing to check.
     """
+    Moi().membre = membre
 
 
 feature = Feature(
@@ -467,6 +468,6 @@ feature = Feature(
               deposer, sortir, archiver, archiver_ouverte, charger, ouvrir,
               fermer, enregistrer, basculer_etiquette, ajouter_sous_tache,
               basculer_sous_tache, retirer_sous_tache, commenter,
-              identifiant_libre, creer, filtrer, changer_de_membre],
+              identifiant_libre, creer, filtrer, devenir],
     uses=["donnees", "state"],
 )

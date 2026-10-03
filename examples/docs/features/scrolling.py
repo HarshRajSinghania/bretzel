@@ -20,7 +20,8 @@ from examples.docs.features.shell import shell
 PATH = "/scrolling"
 
 
-@page(PATH, layout=shell, title='Scrolling')
+@page(PATH, layout=shell, title="Scrolling · Bretzel docs",
+      description="Scrolling in Bretzel: a document that scrolls whole, or an app shell whose sidebar and header stay while the content moves.")
 def scrolling_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

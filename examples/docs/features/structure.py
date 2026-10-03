@@ -109,7 +109,8 @@ def marqueurs_table() -> None:
     )
 
 
-@page(PATH, layout=shell, title="App structure")
+@page(PATH, layout=shell, title="App structure · Bretzel docs",
+      description="Structure a Bretzel app: flat features that decorate themselves, gathered by main with app.include and no central wiring.")
 def structure_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

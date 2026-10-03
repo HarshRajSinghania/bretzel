@@ -108,7 +108,8 @@ def counter_demo() -> None:
     )
 
 
-@page(PATH, layout=shell, title='Server state')
+@page(PATH, layout=shell, title="Server state · Bretzel docs",
+      description="Server state in Bretzel: typed Python classes scoped per page, session, user or app — the source of truth, kept on the server.")
 def state_server_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

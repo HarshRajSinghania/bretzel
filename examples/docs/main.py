@@ -91,10 +91,10 @@ async def sitemap_xml() -> Response:
 
     The three filters are the definition of "public documentation
     route": the framework's own endpoints (``/_bretzel/…``), the
-    parameterised ones (no single URL to publish), and this file's two
+    parameterised ones (no single URL to publish), and this file's
     non-HTML routes.
     """
-    hidden = {"/sitemap.xml", "/robots.txt"}
+    hidden = {"/sitemap.xml", "/robots.txt", "/llms.txt"}
     paths = sorted({
         route.path
         for route in app.fastapi.routes
@@ -113,6 +113,36 @@ async def sitemap_xml() -> Response:
         f"{entries}</urlset>\n",
         media_type="application/xml",
     )
+
+
+@app.fastapi.get("/llms.txt", include_in_schema=False)
+async def llms_txt() -> Response:
+    """The documentation map for language models (llmstxt.org).
+
+    An assistant asked about Bretzel reads this file before the pages:
+    one line per chapter, in the order of the sidebar. Read from
+    ``NAV``, the sidebar's own source, so a chapter added there is
+    listed here with no second edit.
+    """
+    from examples.docs.features.shell import NAV
+
+    lines = [
+        "# Bretzel documentation",
+        "",
+        "> Bretzel is a full-stack Python web framework (server-driven UI): "
+        "typed state, targeted server rendering, 100+ components, realtime "
+        "over SSE, and no npm toolchain. Alpha: APIs may change.",
+        "",
+        "Install with `pip install bretzel` (Python 3.12 or 3.13). "
+        "Source: https://github.com/JeanHoccart/bretzel — "
+        "component gallery: https://ui.bretzel-py.dev",
+    ]
+    for section, items in NAV:
+        lines += ["", f"## {section.capitalize()}", ""]
+        for label, href, _icon, _blurb in items:
+            url = href if href.startswith("http") else f"https://docs.bretzel-py.dev{href}"
+            lines.append(f"- [{label}]({url})")
+    return Response("\n".join(lines) + "\n", media_type="text/plain; charset=utf-8")
 
 from examples.docs.features import (      # noqa: E402 — marks ramassées par include
     actions_client,

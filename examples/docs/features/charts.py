@@ -25,7 +25,8 @@ DEMO = [(1, 12), (2, 19), (3, 14), (4, 23), (5, 21), (6, 28)]
 PARTS = [("Direct", 42), ("Search", 31), ("Referral", 27)]
 
 
-@page(PATH, layout=shell, title="Charts")
+@page(PATH, layout=shell, title="Charts · Bretzel docs",
+      description="Server-rendered SVG charts in Python: five Bretzel chart components with no JavaScript library, visible from the first byte.")
 def charts_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

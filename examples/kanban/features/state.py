@@ -35,7 +35,7 @@ class Moi(SessionState):
     """Who I am on this board.
 
     There is no authentication: this example stages shared state, and a
-    login page is ``auth``'s subject. The banner's selector therefore
+    login page is ``auth``'s subject. The banner's avatar menu therefore
     lets you change identity in one click, which is enough to see a
     journal signed by several hands.
 

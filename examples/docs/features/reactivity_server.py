@@ -12,7 +12,8 @@ from bretzel import page, ui
 from examples.docs.features.shell import shell
 
 
-@page("/reactivity-server", layout=shell, title='Server reactivity')
+@page("/reactivity-server", layout=shell, title="Server reactivity · Bretzel docs",
+      description="Server reactivity in Bretzel: a @refreshable(deps=[...]) zone re-renders automatically when a handler mutates the state it reads.")
 def reactivity_server_page() -> None:
     with ui.container(width="xl"), ui.vstack(gap="lg"):
         ui.heading('Server reactivity', level=1, size="3xl")

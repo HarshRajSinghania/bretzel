@@ -13,6 +13,8 @@ from examples.showcase.lib.studio import Studio, repaint_effect
 
 GITHUB = "https://github.com/JeanHoccart/bretzel"
 DOCS = "https://docs.bretzel-py.dev"
+# The picture a shared link shows; absolute, served by the landing.
+SHARE_IMAGE = "https://bretzel-py.dev/assets/bretzel-mark.png"
 
 
 def identity_menu() -> None:
@@ -48,7 +50,9 @@ def shell() -> None:
     ui.meta_tag(property="og:description",
                 content="Every Bretzel component in real uses, with its Python "
                         "code, under a theme you can switch and tune live.")
+    ui.meta_tag(property="og:image", content=SHARE_IMAGE)
     ui.meta_tag(name="twitter:card", content="summary")
+    ui.meta_tag(name="twitter:image", content=SHARE_IMAGE)
     Studio()
     mobile = Screen().is_mobile
     with ui.viewport(attrs={"bz-effect": repaint_effect()}):

@@ -22,7 +22,8 @@ from examples.docs.features.shell import shell
 PATH = "/languages"
 
 
-@page(PATH, layout=shell, title='The languages')
+@page(PATH, layout=shell, title="The languages · Bretzel docs",
+      description="Internationalisation in Bretzel: the framework translates its own messages, and your app translates its own.")
 def languages_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

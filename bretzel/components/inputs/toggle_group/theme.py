@@ -57,13 +57,22 @@ TOGGLE_GROUP_THEME: dict[str, Any] = {
         # — hover gives a colour preview of what selection looks like :
         # - base   : ``text-muted``
         # - hover  : ``text-(--bz-text)`` (preview, no bg yet)
-        # - active : ``bg-(--bz-bg) text-(--bz-text)`` (full)
+        # - active : an underline + ``bg-(--bz-bg) text-(--bz-text)``
         "item": (
             "inline-flex items-center justify-center gap-1.5 "
             "font-medium text-muted cursor-pointer "
             "border-r-(length:--bz-stroke) border-text/10 last:border-r-0 "
             "transition-colors duration-150 ease-out "
             "not-disabled:hover:text-(--bz-text) "
+            # The selection is an UNDERLINE, the tabs' idiom: the 10 %
+            # tint below is mixed towards the surface and lands on the
+            # ``bg-interface`` rail, where it measured 1.05:1 — a
+            # selected avatar or icon showed nothing. In ``--bz-text``,
+            # not ``--bz-solid``: a dark brand colour (the shipped plum)
+            # is 1.5:1 on the dark rail, the text step is held readable.
+            # Gate: ``tests/runtime_js/test_a_selection_is_visible.py``.
+            "border-b-(length:--bz-stroke-strong) border-b-transparent "
+            "data-[selected=true]:border-b-(--bz-text) "
             "data-[selected=true]:bg-(--bz-bg) "
             "data-[selected=true]:text-(--bz-text) "
             "focus-visible:outline-none focus-visible:ring-2 "

@@ -23,7 +23,12 @@ grammar is deliberately close to a file explorer :
 - **selected** — ``data-[selected=true]`` on the row (the row's OWN
   attribute, not a group selector), rendered statically server-side for
   the initially-selected node and kept reactive via
-  ``bz-attr:data-selected`` (SSR-first, no flash).
+  ``bz-attr:data-selected`` (SSR-first, no flash). The mark is an accent
+  BAR on the row's left edge, drawn by ``::before``: the tint alone
+  measured 1.03 to 1.19:1 against the page or a card, and the coloured
+  bold label is no indicator a glance can find. The bar is in
+  ``--bz-text``, the step held readable on both themes, like the toggle
+  group's underline.
 
 Disabled nodes dim to ``opacity-50`` and show ``cursor-not-allowed``. A
 ``<div>`` row has no ``disabled`` HTML attribute, so the disabled visuals
@@ -55,8 +60,16 @@ TREE_THEME: dict[str, Any] = {
         # the class carries only the right + vertical padding. The
         # ``data-[selected=true]`` selectors read the row's OWN attribute.
         "row": (
-            "flex items-center gap-1.5 w-full rounded-selector cursor-pointer "
-            "outline-none transition-colors duration-150 "
+            "relative flex items-center gap-1.5 w-full rounded-selector "
+            "cursor-pointer outline-none transition-colors duration-150 "
+            # The selection bar — every row carries the pseudo-element,
+            # only the selected one paints it.
+            # Gate: ``tests/runtime_js/test_a_selection_is_visible.py``.
+            # ``start-0``, not ``left-0``: the bar sits on the side the
+            # indent grows from, which flips in a right-to-left language.
+            "before:absolute before:start-0 before:inset-y-1 "
+            "before:w-(length:--bz-stroke-strong) before:rounded-full "
+            "data-[selected=true]:before:bg-(--bz-text) "
             "focus-visible:ring-2 focus-visible:ring-inset "
             "focus-visible:ring-(--bz-focus) "
             "hover:bg-text/5 "

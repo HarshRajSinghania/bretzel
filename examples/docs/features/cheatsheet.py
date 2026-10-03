@@ -23,7 +23,8 @@ def section(title: str, code: str) -> None:
             ui.code(code, lang="python")
 
 
-@page(PATH, layout=shell, title="Cheat sheet")
+@page(PATH, layout=shell, title="Cheat sheet · Bretzel docs",
+      description="The whole Bretzel API on one page: every public name of the Python web framework, grouped by the need it answers.")
 def cheatsheet_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

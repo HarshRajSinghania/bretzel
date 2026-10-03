@@ -20,7 +20,8 @@ _CYCLE = [
 ]
 
 
-@page("/how", layout=shell, title="How Bretzel works")
+@page("/how", layout=shell, title="How Bretzel works · Bretzel docs",
+      description="How Bretzel works: what runs in the browser, what runs on the server, and when an interaction crosses from one to the other.")
 def how_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

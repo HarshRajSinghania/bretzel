@@ -127,6 +127,7 @@ Diagram.direction
 # la prop, faute de table de theme a lire.
 Accordion.size
 Avatar.size
+Avatar.variant
 Badge.size
 Badge.variant
 Banner.size

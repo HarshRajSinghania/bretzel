@@ -5,7 +5,8 @@ from bretzel import page, ui
 from examples.docs.features.shell import shell
 
 
-@page("/", layout=shell, title="Introduction")
+@page("/", layout=shell, title="Bretzel docs — reactive web apps in typed Python",
+      description="Documentation for Bretzel, the full-stack Python web framework: typed state, targeted server rendering, 100+ components and no npm toolchain.")
 def home_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="xl"):

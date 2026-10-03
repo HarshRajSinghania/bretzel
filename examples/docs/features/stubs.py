@@ -65,6 +65,9 @@ def routes_livrees() -> frozenset[str]:
 
 
 def stub_body(title: str, blurb: str) -> None:
+    # A placeholder is thin content: kept out of search results until the
+    # chapter exists (the most restrictive robots tag wins over the shell's).
+    ui.meta_tag(name="robots", content="noindex")
     with ui.container(width="md"):
         with ui.vstack(gap="lg", align="center", justify="center",
                        classes="min-h-[60vh] text-center"):

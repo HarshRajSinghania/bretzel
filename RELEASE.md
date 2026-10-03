@@ -10,7 +10,8 @@ explicit action after the candidate has passed CI.
 3. In PyPI, add a Trusted Publisher for this repository, workflow
    `.github/workflows/publish.yml`, environment `pypi`.
 4. Create a protected GitHub environment named `pypi` and require approval.
-5. Point `bretzel.dev` at the public documentation or landing page.
+5. Point `bretzel-py.dev` at the landing page (`docs.`, `ui.` and `demo.`
+   serve the documentation, the component gallery and the Kanban).
 
 No PyPI password or API token belongs in GitHub secrets. The publish workflow
 uses GitHub's short-lived OIDC identity.
@@ -30,13 +31,13 @@ uses GitHub's short-lived OIDC identity.
    the distributions only if the tag exactly matches the package version.
 9. Install the public wheel in a new environment and run the README quickstart.
 
-## First-alpha announcement draft
+## Alpha announcement draft
 
-> Bretzel `0.1.0a1` is out: a Server-Driven UI framework for Python with typed
-> state, partial updates, realtime broadcast and no application JavaScript or
-> npm pipeline to maintain.
+> Bretzel `0.1.0a2` is out: a full-stack Python web framework, server-driven,
+> with typed state, partial updates, realtime broadcast and no application
+> JavaScript or npm pipeline to maintain.
 >
-> The first alpha includes more than 100 UI components, a small in-house browser
+> This alpha includes more than 100 UI components, a small in-house browser
 > runtime, FastAPI integration, authentication primitives, SSE, drag-and-drop,
 > server-rendered charts and framework-aware inspection tools.
 >
@@ -55,4 +56,5 @@ uses GitHub's short-lived OIDC identity.
 > becomes unclear.
 
 Pair the announcement with a short recording of the Kanban demo in two browser
-windows and links to the quickstart, live demo, documentation and issue tracker.
+windows and links to the landing (<https://bretzel-py.dev>), quickstart,
+component gallery, live demo, documentation and issue tracker.

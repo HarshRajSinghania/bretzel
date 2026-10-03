@@ -7,7 +7,8 @@ from examples.docs.features.shell import shell
 PATH = "/quickstart"
 
 
-@page(PATH, layout=shell, title="Quickstart")
+@page(PATH, layout=shell, title="Quickstart · Bretzel docs",
+      description="Install Bretzel from PyPI, create a project with bretzel new, run the dev server and edit your first Python page in five minutes.")
 def quickstart_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="xl"):

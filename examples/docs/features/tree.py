@@ -222,7 +222,8 @@ def libelle(n: PackageNode) -> ui.Fragment:
     return frag
 
 
-@page(PATH, layout=shell, title="The framework's tree")
+@page(PATH, layout=shell, title="The framework's tree · Bretzel docs",
+      description="The Bretzel framework's source tree, described by itself: every package and module, read live from the installed code.")
 def tree_page() -> None:
     racine = describe_package("bretzel")
     total = len(package_names())

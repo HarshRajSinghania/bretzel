@@ -162,7 +162,10 @@ async def render_page(
         envelope_json,
         page_uuid=ctx.page_uuid,
         title=title,
-        description=meta.description,
+        # ``Bretzel(description=…)`` is the fallback the config promises:
+        # a page that declares none still gets a ``<meta name="description">``,
+        # without which a search engine invents its own snippet.
+        description=meta.description or getattr(cfg, "description", None),
         # ``default_shell`` has carried this parameter forever and
         # NOBODY passed it: every Bretzel page shipped
         # ``<html lang="en">``, French apps included — a screen reader

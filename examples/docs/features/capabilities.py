@@ -101,7 +101,8 @@ def carte(cap: Capability) -> None:
                          title="What to know first")
 
 
-@page(PATH, layout=shell, title='What Bretzel can do')
+@page(PATH, layout=shell, title="What Bretzel can do · Bretzel docs",
+      description="Everything the Bretzel Python web framework can do, searchable: each capability with the chapter that teaches it and its CLI equivalent.")
 def capabilities_page() -> None:
     filtre = Filtre()
 

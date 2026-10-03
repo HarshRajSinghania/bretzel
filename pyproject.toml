@@ -5,20 +5,31 @@ build-backend = "hatchling.build"
 [project]
 name = "bretzel"
 version = "0.1.0a2"
-description = "Server-Driven UI for Python — typed state, zero npm, batteries included."
+description = "Full-stack Python web framework: server-driven UI, typed state, 100+ components, zero npm."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Jean Hoccart", email = "jean.hoccart@gmail.com" }]
-keywords = ["ui", "framework", "fastapi", "htmx", "server-driven", "sdui"]
+keywords = [
+    "web framework", "full-stack", "python web framework", "server-driven ui",
+    "sdui", "reactive", "ui components", "no javascript", "fastapi", "htmx",
+    "sse", "realtime", "tailwind",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
-    "Framework :: FastAPI",
-    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Software Development :: User Interfaces",
 ]
 
 dependencies = [
@@ -67,9 +78,12 @@ probe = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/JeanHoccart/bretzel"
-Documentation = "https://github.com/JeanHoccart/bretzel#readme"
+Homepage = "https://bretzel-py.dev"
+Documentation = "https://docs.bretzel-py.dev"
+Components = "https://ui.bretzel-py.dev"
+Demo = "https://demo.bretzel-py.dev"
 Repository = "https://github.com/JeanHoccart/bretzel"
+Issues = "https://github.com/JeanHoccart/bretzel/issues"
 Changelog = "https://github.com/JeanHoccart/bretzel/blob/main/CHANGELOG.md"
 
 # Point d'entrée unique : création et serveur de dev, introspection, lint et

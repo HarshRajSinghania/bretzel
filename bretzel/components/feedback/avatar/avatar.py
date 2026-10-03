@@ -21,6 +21,9 @@ Optional ``status=`` overlays a small dot in the bottom-right corner
 (``online`` / ``offline`` / ``busy`` / ``away``).
 
 ``shape=`` picks ``circle`` (default) or ``square``.
+
+``variant=`` picks the fill: ``soft`` (default, a tint) or ``solid``
+(the full colour, for a disc that must hold on a dark surface).
 """
 
 from __future__ import annotations
@@ -85,6 +88,7 @@ class Avatar(Component):
     name: str | None = reactive_prop(default=None, emit_attr=False)
     initials: str | None = reactive_prop(default=None, emit_attr=False)
     size: str = reactive_prop(default="md", emit_attr=False)
+    variant: str = reactive_prop(default="soft", emit_attr=False)
     shape: str = reactive_prop(default="circle", emit_attr=False)
     color: str = reactive_prop(default="primary", emit_attr=False)
     status: str | None = reactive_prop(default=None, emit_attr=False)
@@ -97,6 +101,7 @@ class Avatar(Component):
         name: str | None = None,
         initials: str | None = None,
         size: str | None = None,
+        variant: str | None = None,
         shape: str | None = None,
         color: str | None = None,
         status: str | None = None,
@@ -105,7 +110,7 @@ class Avatar(Component):
         # Direct forward: the base layer drops reactive None kwargs (keeps the default).
         super().__init__(
             src=src, alt=alt, name=name, initials=initials,
-            size=size, shape=shape, color=color,
+            size=size, variant=variant, shape=shape, color=color,
             status=status,
             **kwargs,
         )
@@ -255,10 +260,9 @@ class Avatar(Component):
         attrs["class"] = " ".join(
             p
             for p in (
-                self.compose_class(
-                    "root",
-                    apply_variant_size_modifiers=False,
-                ),
+                # The variant comes with the slot; the size is a
+                # per-slot dict, so it is read by hand below.
+                self.compose_class("root"),
                 shapes.get(shape, shapes.get("circle", "")),
                 size_map.get("root", ""),
             )

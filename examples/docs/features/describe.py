@@ -10,7 +10,8 @@ from bretzel import page, ui
 from examples.docs.features.shell import shell
 
 
-@page("/describe", layout=shell, title='Describe the UI')
+@page("/describe", layout=shell, title="Describe the UI · Bretzel docs",
+      description="Describe a user interface in Python with Bretzel: ui.* components composed with with-blocks into a tree, before any state moves.")
 def describe_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

@@ -77,7 +77,8 @@ _TRAPS: list[tuple[str, str, str]] = [
 ]
 
 
-@page(PATH, layout=shell, title='Traps')
+@page(PATH, layout=shell, title="Traps · Bretzel docs",
+      description="Bretzel gotchas, condensed: the silent failures that do not crash but do not work, and how to avoid them.")
 def traps_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

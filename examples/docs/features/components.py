@@ -53,7 +53,8 @@ def family_card(label: str, icon: str, components: list[ComponentInfo]) -> None:
                         component_mirror(info)
 
 
-@page(PATH, layout=shell, title="ui.* catalogue")
+@page(PATH, layout=shell, title="ui.* catalogue · Bretzel docs",
+      description="The ui.* catalogue, read live from the code: every Bretzel component's signature, bindable props, events, slots and imperative methods.")
 def components_page() -> None:
     infos = [describe_ui_symbol(n) for n in ui_symbol_names()]
     components = [i for i in infos if isinstance(i, ComponentInfo)]

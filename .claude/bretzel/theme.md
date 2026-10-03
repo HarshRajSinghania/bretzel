@@ -292,7 +292,7 @@ classes qui partagent une clé partagent le **même objet** `THEME` (vérifié :
 le catalogue, pas trois :
 `slots` (89 composants <!--count:theme_slots_group-->),
 `sizes` (46 <!--count:theme_sizes_group-->),
-`variants` (9 seulement <!--count:theme_variants_group-->), puis
+`variants` (10 seulement <!--count:theme_variants_group-->), puis
 `widths`, `gaps`, `paddings`, `modifiers`, `colors`, `shapes`, `statuses`,
 `ratios`, `sides`, `collapse`, `backdrop`… **21 groupes** <!--count:theme_scalar_groups-->
 ne sont pas des tables mais une valeur unique (`hoverable`, `sticky`,

@@ -28,7 +28,8 @@ from examples.docs.lib.runtime_surface import describe_magics
 PATH = "/runtime"
 
 
-@page(PATH, layout=shell, title='The client runtime')
+@page(PATH, layout=shell, title="The client runtime · Bretzel docs",
+      description="Bretzel's client runtime: the in-house browser engine behind the framework, what it guarantees, and its full bz-* vocabulary.")
 def runtime_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

@@ -40,7 +40,8 @@ def rule_rows() -> list[dict[str, str]]:
     ]
 
 
-@page(PATH, layout=shell, title='Judge the code')
+@page(PATH, layout=shell, title="Judge the code · Bretzel docs",
+      description="bretzel check judges your app's code against the framework: static rules first, then --deep to compare declared features with what they do.")
 def check_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

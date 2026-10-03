@@ -26,12 +26,13 @@ from examples.kanban.features.donnees import (
     INITIALES,
     LIB_ETIQUETTE,
     NOMS,
+    STATUTS,
     Tableau,
     avancement,
     colonne_de,
     colonnes,
     depuis,
-    echeance_lisible,
+    echeance,
     occupation,
 )
 from examples.kanban.features.fiche import tiroir
@@ -46,71 +47,97 @@ from examples.kanban.features.shell import shell
 from examples.kanban.features.state import Affichage, Filtres
 
 
+def indice(icone: str, texte: str, teinte: str = "muted") -> None:
+    """One fact of a card's bottom line: a small icon and its value."""
+    with ui.hstack(gap="xs", align="center"):
+        ui.icon(icone, size="xs", color=teinte)
+        ui.text(texte, size="xs", color=teinte)
+
+
 def vignette(carte: dict) -> None:
     """A card, as it reads without opening it.
+
+    Title, labels, then one line of facts that ends on the owner. The
+    owner closes EVERY card, so that line is always drawn and the cards
+    of a column share one rhythm; the labels line is skipped when empty.
+
+    Two spacings, not one: the title and its labels are ONE block, held
+    close; the facts line stands apart. The padding lives on the inner
+    stack (``p-5``) because the card's ``padding=`` steps jump from 12 to
+    18 px, and the board wants the step between.
 
     The click opens the drawer and the drag moves it, without treading on
     each other: the base layer only arms a drag after a pointer movement
     (or a long press with a finger), so a clean click stays a click.
     """
     faites, total = avancement(carte)
-    with ui.card(padding="sm", hoverable=True,
-                 on_click=partial(ouvrir, carte["id"])), ui.vstack(gap="xs"):
-        if carte["etiquettes"]:
-            with ui.hstack(gap="xs", wrap=True):
-                for cle in carte["etiquettes"]:
-                    ui.badge(LIB_ETIQUETTE[cle], size="xs",
-                             variant="soft", color=COUL_ETIQUETTE[cle])
-        ui.text(carte["titre"], size="sm", weight="medium")
+    # Not ``hoverable=True``: the shipped relief lifts the card by a
+    # pixel and adds a shadow, so the card one is about to click or drag
+    # moves under the pointer. Here the hover only lights the border.
+    with ui.card(padding="none", on_click=partial(ouvrir, carte["id"]),
+                 classes="shadow-xs cursor-pointer transition-colors "
+                         "duration-150 hover:border-text/20"), \
+            ui.vstack(gap="md", classes="p-5"):
+        with ui.vstack(gap="sm"):
+            ui.text(carte["titre"], size="sm", weight="medium",
+                    classes="leading-snug")
+            if carte["etiquettes"]:
+                with ui.hstack(gap="xs", wrap=True):
+                    for cle in carte["etiquettes"]:
+                        ui.badge(LIB_ETIQUETTE[cle], size="sm",
+                                 variant="soft", color=COUL_ETIQUETTE[cle])
+        # The facts WRAP and the owner does not: in a narrow column the
+        # date and the comment count go to a second line rather than push
+        # the avatar out of the card.
         with ui.hstack(justify="between", align="center", gap="sm"):
-            with ui.hstack(gap="sm", align="center"):
+            with ui.hstack(gap="md", align="center", wrap=True,
+                           classes="min-w-0"):
                 if total:
-                    with ui.hstack(gap="xs", align="center"):
-                        ui.icon("square-check-big", size="xs",
-                                color="success" if faites == total
-                                else "muted")
-                        ui.text(f"{faites}/{total}", size="xs",
-                                color="muted")
-                if carte["echeance"]:
-                    with ui.hstack(gap="xs", align="center"):
-                        ui.icon("calendar", size="xs", color="muted")
-                        ui.text(echeance_lisible(carte["echeance"]),
-                                size="xs", color="muted")
+                    indice("square-check-big", f"{faites}/{total}",
+                           "success" if faites == total else "muted")
+                libelle, teinte = echeance(carte)
+                if libelle:
+                    indice("calendar", libelle, teinte)
                 if carte["commentaires"]:
-                    with ui.hstack(gap="xs", align="center"):
-                        ui.icon("message-circle", size="xs",
-                                color="muted")
-                        ui.text(str(len(carte["commentaires"])),
-                                size="xs", color="muted")
-            with ui.hstack(gap="xs", align="center"):
+                    indice("message-circle", str(len(carte["commentaires"])))
+            with ui.hstack(gap="sm", align="center", classes="shrink-0"):
                 if carte["points"]:
-                    ui.badge(str(carte["points"]), size="xs",
+                    ui.badge(str(carte["points"]), size="sm",
                              variant="soft", color="muted")
-                ui.avatar(initials=INITIALES[carte["qui"]], size="xs",
+                ui.avatar(variant="solid", initials=INITIALES[carte["qui"]], size="xs",
                           color=COULEURS[carte["qui"]],
                           tooltip=NOMS[carte["qui"]])
 
 
 def colonne(cle: str, libelle: str, limite: int | None) -> None:
-    """A column: its header, its limit, and its drop zone."""
+    """A column: its status mark, its count, and its drop zone.
+
+    A column at its work-in-progress limit says so on its COUNTER, in
+    amber, and nowhere else: a sprint in full swing keeps its limited
+    columns full, so the state is normal and must not read as an error.
+    """
     filtres = Filtres()
     cartes = colonne_de(cle, filtres.qui, filtres.etiquette, filtres.q)
     dedans = occupation(cle)
     saturee = limite is not None and dedans >= limite
+    icone, teinte = STATUTS[cle]
 
-    with ui.vstack(gap="sm", classes="flex-1 min-w-56 min-h-0"):
+    with ui.vstack(gap="none",
+                   classes="flex-1 min-w-[13rem] min-h-0 rounded-box "
+                           "bg-text/4"):
         with ui.hstack(justify="between", align="center",
-                       classes="px-1 shrink-0"):
-            with ui.hstack(gap="xs", align="center"):
-                ui.heading(libelle, level=2, size="sm")
+                       classes="px-4 pt-5 pb-3 shrink-0"):
+            with ui.hstack(gap="sm", align="center"):
+                ui.icon(icone, size="sm", color=teinte)
+                ui.heading(libelle, level=2, size="sm", weight="semibold")
                 # ⚠️ The ``tooltip=`` is set on ALL the columns,
                 # including those without a limit. It wraps the badge, so
                 # capping only two shifted their headers by two pixels
                 # relative to the others — visible on a screenshot.
                 ui.badge(
                     f"{dedans} / {limite}" if limite else str(dedans),
-                    size="xs", variant="soft",
-                    color="error" if saturee else "muted",
+                    size="sm", variant="soft",
+                    color="warning" if saturee else "muted",
                     tooltip=(
                         tr(f"Work-in-progress limit: {limite} cards",
                            f"Limite d'en-cours : {limite} cartes")
@@ -132,9 +159,8 @@ def colonne(cle: str, libelle: str, limite: int | None) -> None:
         # the page.
         with ui.dropzone(
             name=cle, accepts=[GROUPE], on_move=deposer, color="primary",
-            classes="flex-1 min-h-0 overflow-y-auto rounded-lg p-2 "
-                    + ("bg-error/5" if saturee else "bg-text/5"),
-        ), ui.vstack(gap="sm"):
+            classes="flex-1 min-h-0 overflow-y-auto px-4 pb-4",
+        ), ui.vstack(gap="md"):
             for carte in ui.drag_each(cartes, group=GROUPE, key="id"):
                 vignette(carte)
             if not cartes:
@@ -145,31 +171,40 @@ def colonne(cle: str, libelle: str, limite: int | None) -> None:
 
 
 def bande_archive() -> None:
-    """The board's exit: a strip, under the columns.
+    """The board's exit: a strip under the columns, shown while dragging.
 
     This is a terminal action, not a fifth column: the runtime reports a
     drop to this zone without inserting a card into its fixed-height box.
     The floating preview stays visible until release.
+
+    At rest it is transparent and lets clicks through; the drag engine
+    marks every zone that would accept the card in flight with
+    ``data-bz-drop-ok``, and that mark is what makes it appear. It keeps
+    its place in the flow all the while: a strip that pushed the columns
+    up as the drag starts would move the cards under the pointer.
     """
     with ui.dropzone(
         name=ZONE_ARCHIVE, accepts=[GROUPE], locked=True,
         terminal=True, on_move=archiver,
         color="error",
-        classes="flex-none h-14 min-h-0! overflow-hidden rounded-lg "
+        classes="flex-none h-12 min-h-0! overflow-hidden rounded-box "
                 "border border-dashed border-text/20 flex items-center "
-                "justify-center gap-2",
+                "justify-center gap-2 opacity-0 pointer-events-none "
+                "transition-opacity duration-150 "
+                "data-[bz-drop-ok=true]:opacity-100 "
+                "data-[bz-drop-ok=true]:pointer-events-auto",
     ):
-        ui.icon("archive", size="sm", color="muted")
-        ui.text(tr("Drop a card here to archive it",
-                   "Lâche une carte ici pour l'archiver"),
-                size="xs", color="muted")
+        ui.icon("archive", size="sm", color="error")
+        ui.text(tr("Drop here to archive", "Lâche ici pour archiver"),
+                size="sm", color="error")
 
 
 @refreshable(deps=[Tableau, Filtres])
 def plateau() -> None:
     """The four columns of the current session's board."""
-    with ui.vstack(gap="sm", classes="flex-1 min-h-0 min-w-0 p-4"):
-        with ui.hstack(gap="md", align="stretch",
+    with ui.vstack(gap="sm",
+                   classes="flex-1 min-h-0 min-w-0 px-5 pt-5 pb-3"):
+        with ui.hstack(gap="lg", align="stretch",
                        classes="flex-1 min-h-0 min-w-0 overflow-x-auto"):
             for cle, libelle, limite in colonnes():
                 colonne(cle, libelle, limite)
@@ -183,55 +218,81 @@ def activite() -> None:
     Entries already undone stay shown, set back — the stack is in front
     of the cursor, it is not erased until something is rewritten.
 
-    ⚠️ **Unfolding the panel no longer goes through the server.** It
-    lived in ``Vue`` (a server state), so folding a column cost a round
-    trip, this zone's re-render, and the wait — to flip a class. Both
-    versions are now rendered and ``visible=`` hides one: zero requests,
-    and ``Vue`` leaves the zone's dependencies.
+    ⚠️ **Folding the panel never goes through the server.** ``Affichage``
+    is a client state: the panel's WIDTH follows it through a bound
+    ``style=``, and CSS animates the change. One panel, not a panel and a
+    rail swapped by ``visible=`` — the toggle sits at the panel's right
+    edge in both states, so it stays put while the panel slides around
+    it; two swapped elements put it at two different heights.
+
+    The feed has a fixed width and is clipped by the panel, so it slides
+    in whole rather than re-wrapping its lines at every frame.
     """
     affichage = Affichage()
     tableau = Tableau()
 
-    # The rail, when the panel is folded. Rendered permanently — it is
-    # what allows switching without asking anybody anything.
-    with ui.vstack(align="center", visible=~affichage.activite,
-                   classes="flex-none w-12 border-l border-text/10 pt-4"):
-        ui.icon_button("panel-right-open", variant="ghost", size="sm",
-                       on_click=affichage.activite.set(True),
-                       tooltip=tr("Show the activity",
-                                  "Montrer l'activité"))
-
-    with ui.pane(padding="none", gap="none", visible=affichage.activite,
-                 classes="flex-none w-80 border-l border-text/10"):
-        with ui.hstack(justify="between", align="center",
-                       classes="px-4 py-3 shrink-0"):
-            ui.heading(tr("Activity", "Activité"), level=2, size="sm")
-            ui.icon_button("panel-right-close", variant="ghost", size="sm",
-                           on_click=affichage.activite.set(False),
-                           tooltip=tr("Hide the activity",
-                                      "Cacher l'activité"))
-        with ui.pane(padding="md", gap="sm", classes="flex-1 min-h-0"):
+    with ui.vstack(gap="none",
+                   style=affichage.activite.then_else(
+                       "width: 18rem", "width: calc(3rem + 1px)"),
+                   classes="flex-none min-h-0 overflow-hidden border-l "
+                           "border-text/10 transition-[width] duration-200 "
+                           "ease-out"):
+        # ``px-4``: 12 px either side of a 24 px button is the folded
+        # panel's 48 px — plus 1 px for its left border, or the button
+        # overflows by that pixel and shifts when the panel folds. So
+        # the button is centred on the rail AND at its place when open.
+        # The top padding puts the title on the line of the column titles
+        # (measured: 29 px, between two 3 px steps).
+        with ui.hstack(align="center", gap="none",
+                       classes="w-full px-4 pt-[1.8125rem] pb-3 shrink-0"):
+            with ui.hstack(gap="sm", align="center",
+                           classes="flex-1 min-w-0 overflow-hidden "
+                                   "whitespace-nowrap"):
+                ui.icon("history", size="sm", color="muted")
+                ui.heading(tr("Activity", "Activité"), level=2, size="sm",
+                           weight="semibold")
+            with ui.hstack(visible=affichage.activite, classes="shrink-0"):
+                ui.icon_button("panel-right-close", variant="ghost",
+                               size="sm",
+                               on_click=affichage.activite.set(False),
+                               tooltip=tr("Hide the activity",
+                                          "Cacher l'activité"))
+            with ui.hstack(visible=~affichage.activite, classes="shrink-0"):
+                ui.icon_button("panel-right-open", variant="ghost",
+                               size="sm",
+                               on_click=affichage.activite.set(True),
+                               tooltip=tr("Show the activity",
+                                          "Montrer l'activité"))
+        with ui.pane(padding="md", gap="md", visible=affichage.activite,
+                     classes="flex-1 min-h-0 w-[18rem]"):
             if not tableau.journal:
-                ui.text(tr("Nobody has done anything yet. Drag a card.",
-                           "Personne n'a encore rien fait. Glisse une "
-                           "carte."),
-                        size="xs", color="muted")
+                ui.empty_state(
+                    icon="mouse-pointer-click", size="sm",
+                    title=tr("Nothing yet", "Rien pour l'instant"),
+                    description=tr(
+                        "Drag a card to another column. Every move is "
+                        "logged here, and can be undone.",
+                        "Glisse une carte dans une autre colonne. Chaque "
+                        "geste s'inscrit ici, et peut être annulé."),
+                )
             for rang, entree in reversed(list(enumerate(tableau.journal))):
                 defaite = rang >= tableau.curseur
                 with ui.hstack(gap="sm", align="start",
                                classes="opacity-40" if defaite else ""):
-                    ui.avatar(initials=INITIALES[entree["qui"]], size="xs",
-                              color=COULEURS[entree["qui"]])
+                    ui.avatar(variant="solid", initials=INITIALES[entree["qui"]],
+                              size="sm", color=COULEURS[entree["qui"]])
                     with ui.vstack(gap="none", classes="min-w-0 flex-1"):
-                        ui.text(f"{NOMS[entree['qui']]} {entree['texte']}",
-                                size="xs")
                         with ui.hstack(gap="xs", align="center"):
+                            ui.text(NOMS[entree["qui"]], size="xs",
+                                    weight="semibold")
                             ui.text(depuis(entree["t"]), size="xs",
                                     color="muted")
                             if defaite:
                                 ui.badge(tr("undone", "annulé"),
                                          size="xs", variant="soft",
                                          color="muted")
+                        ui.text(entree["texte"], size="sm",
+                                classes="leading-snug")
 
 
 @page("/", layout=shell, title="Board")
@@ -263,6 +324,6 @@ def page_tableau() -> None:
 feature = Feature(
     name="tableau", kind="page",
     provides=[page_tableau, plateau, activite, tiroir, colonne,
-              vignette, bande_archive],
+              vignette, indice, bande_archive],
     uses=["donnees", "state", "logic", "shell"],
 )

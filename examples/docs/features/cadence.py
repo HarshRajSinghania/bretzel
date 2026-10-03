@@ -17,7 +17,8 @@ from examples.docs.features.shell import shell
 PATH = "/cadence"
 
 
-@page(PATH, layout=shell, title='The cadence')
+@page(PATH, layout=shell, title="The cadence · Bretzel docs",
+      description="Keep a Bretzel page alive with no click: periodic refresh, countdowns and task polling with one invisible component.")
 def cadence_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):

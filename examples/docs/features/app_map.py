@@ -109,7 +109,8 @@ def node_card(node) -> None:
                         ui.badge(r, color="secondary", variant="soft")
 
 
-@page(PATH, layout=shell, title="App map")
+@page(PATH, layout=shell, title="App map · Bretzel docs",
+      description="Read a Bretzel app's map with describe_app(): its features, states and handlers as a live graph, drawn on the server by ui.diagram.")
 def app_map_page() -> None:
     graph = describe_app(_DEMO)
     by_kind: dict[str, list] = {}

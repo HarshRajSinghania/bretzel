@@ -137,21 +137,13 @@ def cartes_de(page, zone: str) -> int:
         f'[data-bz-dropzone="{zone}"] [data-bz-draggable]').count()
 
 
-def choisir(page, actuelle: str, option: str) -> None:
-    """Piloter un ``ui.select``.
+def filtrer_par(page, membre: str) -> None:
+    """Cliquer un avatar du filtre d'assignation (``ui.toggle_group``).
 
-    ⚠️ Ce n'est PAS un ``<select>`` natif, donc ``select_option`` reste en
-    attente jusqu'au bout du délai. Le déclencheur porte ``role=combobox``
-    et affiche la valeur courante ; les options n'apparaissent qu'une fois
-    la liste ouverte.
+    Le bouton porte la clé du membre dans son attribut ``value`` — le
+    nom n'est que dans l'infobulle.
     """
-    page.get_by_role("combobox").filter(has_text=actuelle).first.click()
-    # ⚠️ ``[role=listbox]`` tout court résout QUATRE éléments dès que le
-    # tiroir a été ouvert une fois : les listes des overlays restent
-    # montées, fermées. Il faut celle qui est VISIBLE.
-    liste = page.locator("[role=listbox]:visible").first
-    liste.wait_for(state="visible", timeout=5000)
-    liste.get_by_role("option").filter(has_text=option).first.click()
+    page.locator(f'[role=group] button[value="{membre}"]').first.click()
     page.wait_for_timeout(900)
 
 
@@ -348,11 +340,15 @@ def le_tiroir(page) -> None:
 
     check("au départ, rien n'est déployé", not ouvert(page))
     page.get_by_text("Fusion des comptes en double").first.click()
-    attendre_texte(page, "Carte c07")
+    attendre_texte(page, "Sous-tâches")
     page.wait_for_timeout(300)
     check("cliquer une carte DÉPLOIE le tiroir", ouvert(page))
+    # Le brouillon est semé par le serveur à l'ouverture : le titre dans
+    # le champ dit QUELLE carte le tiroir porte, sans afficher son
+    # identifiant interne.
+    titre = page.get_by_placeholder("Titre de la carte").input_value()
     check("et il porte la bonne carte",
-          page.get_by_text("Carte c07").count() >= 1)
+          titre == "Fusion des comptes en double", titre)
 
     # Cocher une sous-tâche : écriture immédiate, sans « Enregistrer ».
     # ⚠️ Le texte est composé de DEUX éléments — le compteur suit un
@@ -412,7 +408,7 @@ def les_filtres(page) -> None:
     total = sum(cartes_de(page, z)
                 for z in ("a_faire", "en_cours", "en_revue", "fini"))
 
-    choisir(page, "Toute l'équipe", "Noa Berger")
+    filtrer_par(page, "noa")
     restant = sum(cartes_de(page, z)
                   for z in ("a_faire", "en_cours", "en_revue", "fini"))
     check("filtrer par personne réduit l'affichage", 0 < restant < total,
@@ -422,7 +418,7 @@ def les_filtres(page) -> None:
           page.get_by_text("3 / 3").count() >= 1,
           "la limite compte le travail, pas ce que le filtre laisse voir")
 
-    choisir(page, "Noa Berger", "Toute l'équipe")
+    filtrer_par(page, "tous")
     check("et retirer le filtre rend tout",
           sum(cartes_de(page, z)
               for z in ("a_faire", "en_cours", "en_revue", "fini")) == total)

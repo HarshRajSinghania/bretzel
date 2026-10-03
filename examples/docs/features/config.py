@@ -13,7 +13,8 @@ from examples.docs.lib.blocks import callable_signature
 PATH = "/config"
 
 
-@page(PATH, layout=shell, title="Config & run")
+@page(PATH, layout=shell, title="Config & run · Bretzel docs",
+      description="Configure and run a Bretzel app: the Bretzel(...) options, dev and prod modes, hot reload and run(), read from the code.")
 def config_page() -> None:
     with ui.container(width="xl"):
         with ui.vstack(gap="lg"):
