@@ -157,7 +157,6 @@ def shell() -> None:
         sidebar = ui.sidebar(
             collapsible="overlay" if mobile else "rail",
             open=not mobile,
-            width="lg",
         )
         with sidebar:
             ui.sidebar_title(
