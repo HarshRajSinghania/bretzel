@@ -5,7 +5,7 @@ reproduction are the most useful contributions while the public API settles.
 
 ## Development setup
 
-Requires Python 3.12 or 3.13.
+Requires Python 3.12, 3.13 or 3.14.
 
 ```bash
 python -m venv .venv

@@ -21,7 +21,7 @@ See it first: [component gallery](https://ui.bretzel-py.dev) ·
 
 ## Quickstart
 
-Requires Python 3.12 or 3.13.
+Requires Python 3.12, 3.13 or 3.14.
 
 ```bash
 python -m pip install bretzel

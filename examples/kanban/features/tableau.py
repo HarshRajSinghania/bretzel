@@ -43,7 +43,7 @@ from examples.kanban.features.logic import (
     deposer,
     ouvrir,
 )
-from examples.kanban.features.shell import shell
+from examples.kanban.features.shell import DESCRIPTION, TITLE, shell
 from examples.kanban.features.state import Affichage, Filtres
 
 
@@ -295,7 +295,7 @@ def activite() -> None:
                                 classes="leading-snug")
 
 
-@page("/", layout=shell, title="Board")
+@page("/", layout=shell, title=TITLE, description=DESCRIPTION)
 def page_tableau() -> None:
     # ⚠️ ``align="stretch"`` is not decorative: ``ui.hstack`` aligns on
     # ``center`` by default — the right choice for a row of controls, and

@@ -133,7 +133,7 @@ async def llms_txt() -> Response:
         "typed state, targeted server rendering, 100+ components, realtime "
         "over SSE, and no npm toolchain. Alpha: APIs may change.",
         "",
-        "Install with `pip install bretzel` (Python 3.12 or 3.13). "
+        "Install with `pip install bretzel` (Python 3.12, 3.13 or 3.14). "
         "Source: https://github.com/JeanHoccart/bretzel — "
         "component gallery: https://ui.bretzel-py.dev",
     ]

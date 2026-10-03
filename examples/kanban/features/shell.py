@@ -247,8 +247,27 @@ def filtres_du_bandeau() -> None:
     )
 
 
+#: The demo's head, in English like the default language: this is the
+#: link people share, so it names the framework and says what to try.
+TITLE = "Live Kanban demo — Bretzel, full-stack Python web framework"
+DESCRIPTION = (
+    "A shared Kanban board written in Python only with Bretzel: drag cards, "
+    "undo, and watch a second browser window follow — no JavaScript to write."
+)
+SHARE_IMAGE = "https://bretzel-py.dev/assets/bretzel-mark.png"
+
+
 @layout
 def shell() -> None:
+    ui.meta_tag(name="robots", content="index,follow,max-image-preview:large")
+    ui.meta_tag(property="og:type", content="website")
+    ui.meta_tag(property="og:site_name", content="Bretzel")
+    ui.meta_tag(property="og:title", content=TITLE)
+    ui.meta_tag(property="og:description", content=DESCRIPTION)
+    ui.meta_tag(property="og:url", content="https://demo.bretzel-py.dev/")
+    ui.meta_tag(property="og:image", content=SHARE_IMAGE)
+    ui.meta_tag(name="twitter:card", content="summary")
+    ui.meta_tag(name="twitter:image", content=SHARE_IMAGE)
     with ui.viewport(direction="col"):
         with ui.hstack(justify="between", align="center", gap="md",
                        wrap=True,

@@ -168,7 +168,7 @@ def download(asset: VendoredAsset, *, force: bool = False) -> Path:
         )
 
     target.write_bytes(payload)
-    print(f"[bretzel] {asset.filename} -> {target} ({len(payload):,} octets)")
+    print(f"[bretzel] {asset.filename} -> {target} ({len(payload):,} bytes)")
     return target
 
 
